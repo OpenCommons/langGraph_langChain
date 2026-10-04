@@ -60,7 +60,7 @@ download it. Three separate facts get joined at read time:
 | Fact | Lives in | Means |
 |---|---|---|
 | available | `config/models.registry.json` | the stack has curated metadata for it |
-| selected | `.env` (`LLM_MODEL` / `EMBED_MODEL`) | the API will use it |
+| selected | `.env` (`DEFAULT_MODEL`, optional `LLM_MODEL` tag override / `EMBED_MODEL`) | the API will use it |
 | installed | the Ollama host (`/api/tags`) | the weights are actually pulled |
 
 ```bash
@@ -82,30 +82,46 @@ registry is legitimate while testing.
 
 | ID | Tag | Role | Size | Context | Notes |
 |---|---|---|---|---|---|
-| `llama3.1-8b` | `llama3.1:8b` | llm | 4.9 GB | 128K | General chat/RAG baseline |
+| `llama3.1-8b` | `llama3.1:8b` | llm | 4.9 GB | 128K | **Default** — general chat/RAG, tool calling |
 | `llama3.2-3b` | `llama3.2:3b` | llm | 2.0 GB | 128K | Fast smoke tests |
 | `mistral-7b` | `mistral:7b-instruct-q4_K_M` | llm | 4.4 GB | 32K | RAG grading A/B |
 | `phi3.5-mini` | `phi3.5:3.8b` | llm | 2.2 GB | 128K | No tool-calling |
-| `nemotron-3-nano-4b` | `nemotron-3-nano:4b` | llm | 2.8 GB | 256K | Default NVIDIA agentic — tools + thinking |
+| `nemotron-3-nano-4b` | `nemotron-3-nano:4b` | llm | 2.8 GB | 256K | Alternative agentic model — tools + thinking |
 | `nemotron-3-nano-30b` | `nemotron-3-nano:30b` | llm | 24 GB | 1M | Needs ≥48 GB RAM |
 | `nomic-embed-text` | `nomic-embed-text` | embedding | 274 MB | 2K | Default embedder, 768-dim |
 | `ternary-bonsai-4b` | `ternary-bonsai:4` | embedding | 546 MB | 32K | **broken** — see known issue below |
 
-**NVIDIA Nemotron 3 Nano 4B** is the registry's default agent model on a
-16 GB host: hybrid Mamba-2/MoE, native tool-calling and reasoning modes, and a
-256K context at 2.8 GB — roughly half the footprint of `llama3.1-8b` with twice
-the context.
+**Default model: `llama3.1-8b`.** `DEFAULT_MODEL` (a registry id, default
+`llama3.1-8b`) is the single source of truth; every service resolves it to the
+Ollama tag `llama3.1:8b` through the registry. Set `LLM_MODEL=<ollama tag>` only
+to override with a tag directly. `make pull-model` (and `setup.sh`) pull it.
 
 ```bash
-make model-pull ID=nemotron-3-nano-4b
+make pull-model                      # pulls DEFAULT_MODEL (llama3.1:8b)
+DEFAULT_MODEL=nemotron-3-nano-4b make pull-model   # or switch the default
 curl -s -X POST localhost:4000/chat -H 'Content-Type: application/json' \
-  -d '{"model":"nemotron-3-nano:4b","messages":[{"role":"user","content":"hi"}]}'
+  -d '{"messages":[{"role":"user","content":"hi"}]}'
 ```
 
-Fresh `.env` files select it with `LLM_MODEL=nemotron-3-nano:4b`, and
-`setup.sh` pulls that tag by default. The 30B variant is registered but not for
-this baseline: `nemotron-3-nano:latest` resolves to it, which is why the
+**NVIDIA Nemotron 3 Nano 4B** remains registered as an alternative agentic
+model (half the footprint, 256K context). The 30B variant is registered but not
+for this baseline: `nemotron-3-nano:latest` resolves to it, which is why the
 registry pins explicit `:4b` / `:30b` tags.
+
+## LangChain & LangGraph
+
+The API exposes real LangChain (`/lc/*`) and LangGraph (`/lg/*`) facilities on
+top of the default model: LCEL chains, tool calling, RAG, chat memory, SSE
+streaming, a checkpointed ReAct agent, human-in-the-loop interrupts and a
+supervisor workflow.
+
+```bash
+make langchain-demo     # summarization chain + tool calling
+make langgraph-demo     # checkpointed ReAct agent (thread "demo")
+```
+
+See [`docs/LANGCHAIN_LANGGRAPH.md`](docs/LANGCHAIN_LANGGRAPH.md) for the
+architecture, configuration and endpoint examples.
 
 ### Adding a model
 

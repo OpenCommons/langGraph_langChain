@@ -24,7 +24,11 @@ This repo provides local AI/RAG/vector services and a RealityEngine bridge. It s
 - `services/api/core/topology_builder.py`: topology/graph construction.
 - `services/api/core/model_registry.py`: model registry loader; joins model registry
   metadata with the `.env` selection and live Ollama tags.
-- `services/api/graphs/`: agent and RAG graph flows.
+- `services/api/graphs/`: agent and RAG graph flows, plus the LangGraph
+  facilities (`react_agent`, `checkpoint`, `approval_graph`, `supervisor_graph`).
+- `services/api/chains/`: LangChain facilities (LCEL chains, tools, RAG, memory).
+- `services/api/core/llm_factory.py`: chat-model factory; default model
+  `llama3.1-8b` (`DEFAULT_MODEL` → `llama3.1:8b`). See `docs/LANGCHAIN_LANGGRAPH.md`.
 - `services/api/routers/`: chat, graph, GraphQL, health, models, and RAG routes.
 - `services/api/tests/`: API and e2e tests.
 - `config/`: dashboards and runtime config.
@@ -51,6 +55,9 @@ make query
 make agent
 make models                    # model registry + installed state
 make model-pull ID=<model-id>  # pull a registered model
+make pull-model                # pull DEFAULT_MODEL (llama3.1-8b)
+make langchain-demo            # /lc demos
+make langgraph-demo            # /lg demo
 
 # Machine contract gates (need a sibling RealityEngine_Machines checkout)
 ./scripts/validate-machines.sh       # data/machines/*.json vs the canonical schema

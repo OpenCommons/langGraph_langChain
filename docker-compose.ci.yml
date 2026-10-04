@@ -59,5 +59,6 @@ services:
       RE_SSL_VERIFY: "false"
       # Ollama may not be available in CI; the API starts and reports degraded.
       OLLAMA_BASE_URL: "http://127.0.0.1:11434"
+      DEFAULT_MODEL: "${DEFAULT_MODEL:-llama3.1-8b}"
       # Use in-memory SQLite for LangGraph checkpointer if Redis timing is tight
       LOG_LEVEL: "warning"
