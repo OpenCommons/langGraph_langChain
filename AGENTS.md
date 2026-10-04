@@ -10,6 +10,7 @@ This repo provides local AI/RAG/vector services and a RealityEngine bridge. It m
 
 - Treat `services/api/core/reality_bridge.py` and `services/api/config.py` as the primary integration surfaces.
 - Verify live environment values against the registry-selected RE/PE pair before debugging RAG behavior.
+- Default model is `DEFAULT_MODEL=llama3.1-8b` (resolved to `llama3.1:8b` via the model registry); build chat models with `core/llm_factory.py`. LangChain (`chains/`, `/lc`) and LangGraph (`graphs/`, `/lg`) facilities are described in `docs/LANGCHAIN_LANGGRAPH.md`.
 - Keep local AI provider evidence separate from OpenClaw ACP evidence.
 - Avoid committing local model data, vector stores, or secrets.
 
@@ -27,6 +28,8 @@ Common commands:
 make health
 make query
 make agent
+make langchain-demo
+make langgraph-demo
 pytest services/api/tests --ignore=services/api/tests/e2e
 ```
 

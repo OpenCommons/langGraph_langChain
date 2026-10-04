@@ -11,7 +11,7 @@ monitoring.
 
 | Service | URL | Description |
 |---|---|---|
-| API (REST + GraphQL) | http://localhost:4000 | RAG / LangGraph orchestration |
+| API (REST + GraphQL) | http://localhost:4000 | RAG / LangChain (`/lc`) / LangGraph (`/lg`) orchestration |
 | API Docs | http://localhost:4000/docs | OpenAPI explorer |
 | Open WebUI | http://localhost:4080 | Chat UI against native Ollama |
 | Qdrant | http://localhost:4333/dashboard | Vector DB (unified with Reality Engine) |
@@ -123,6 +123,22 @@ make langgraph-demo     # checkpointed ReAct agent (thread "demo")
 See [`docs/LANGCHAIN_LANGGRAPH.md`](docs/LANGCHAIN_LANGGRAPH.md) for the
 architecture, configuration and endpoint examples.
 
+### Endpoint reference
+
+| Endpoint | Facility |
+|---|---|
+| `POST /lc/chat` | LangChain chat with per-session memory (`stream: true` → SSE) |
+| `POST /lc/summarize` · `/lc/structured` | LCEL summarization · Pydantic structured output |
+| `POST /lc/tools` | tool calling (calculator, current time) |
+| `POST /lc/rag` | retriever chain over Qdrant |
+| `POST /lg/agent/run` · `/lg/agent/stream` · `GET /lg/agent/state/{thread}` | ReAct agent, SQLite-checkpointed per `thread_id`, event streaming |
+| `POST /lg/approval/start` · `/lg/approval/resume` | human-in-the-loop interrupt / resume |
+| `POST /lg/supervisor/run` | supervisor → worker multi-agent workflow |
+| `POST /graph/rag` · `/graph/agent` | existing Reality Engine-bound LangGraph graphs |
+
+Configuration: `DEFAULT_MODEL`, `LLM_MODEL`, `CHECKPOINT_DB_PATH`,
+`LANGSMITH_TRACING` / `LANGSMITH_API_KEY` / `LANGSMITH_PROJECT` (see `.env.example`).
+
 ### Adding a model
 
 1. Append an entry to `config/models.registry.json` (stable kebab-case `id`,
@@ -202,6 +218,10 @@ tail -f /tmp/ollama.log
   > return HTTP 500 (`file_type=unknown`) until upstream Ollama ships GGML
   > with TQ1_0/BitNet support.  For a working default, set
   > `EMBED_MODEL=nomic-embed-text` + `EMBED_DIM=768` in `.env`.
+- **LangChain / LangGraph** modules (`services/api/chains/`, `graphs/`,
+  `core/llm_factory.py`) run inside the same api container; LangGraph state is
+  checkpointed to SQLite at `CHECKPOINT_DB_PATH` (`./volumes/state`).
+  See [docs/LANGCHAIN_LANGGRAPH.md](docs/LANGCHAIN_LANGGRAPH.md).
 - **GraphQL trigger receiver** (`services/api/routers/graphql_endpoint.py`)
   exposes `POST /graphql` for machine → AI upstream pushes.  Events are retained
   in a 128-entry ring buffer; verify with `curl http://localhost:4000/graphql/events`.
