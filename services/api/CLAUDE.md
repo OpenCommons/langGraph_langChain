@@ -5,8 +5,10 @@ This directory contains the FastAPI service for local AI/RAG/vector workflows.
 - `main.py` is the service entrypoint.
 - `config.py` owns runtime settings.
 - `core/reality_bridge.py` is the key RE/PE integration surface.
-- `routers/` exposes chat, graph, GraphQL, health, and RAG APIs.
-- `graphs/` contains agent/RAG flows.
+- `routers/` exposes chat, graph, GraphQL, health, and RAG APIs, plus `/lc` (LangChain) and `/lg` (LangGraph).
+- `graphs/` contains agent/RAG flows and LangGraph facilities (ReAct, checkpoint, approval, supervisor).
+- `chains/` contains LangChain facilities (LCEL, tools, RAG, memory); `core/llm_factory.py` builds the chat model (default `llama3.1-8b`).
+- Details: `docs/LANGCHAIN_LANGGRAPH.md`.
 - Use Pyright/Ruff and run relevant API tests after behavior changes.
 
 ## Standing rules — authoritative in `../../../RealityEngine_CI/docs/ENGINEERING_CONTRACT.md`

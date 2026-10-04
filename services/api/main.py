@@ -7,7 +7,17 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from config import get_settings
 from core.bridge_binding import EngineAffinityMiddleware
-from routers import chat, graph, health, models, observations, patient_wellness, rag
+from routers import (
+    chat,
+    graph,
+    health,
+    langchain_api,
+    langgraph_api,
+    models,
+    observations,
+    patient_wellness,
+    rag,
+)
 from routers.graphql_endpoint import events_router as graphql_events_router
 from routers.graphql_endpoint import graphql_app
 
@@ -23,6 +33,10 @@ async def lifespan(app: FastAPI):
         embed_model=s.embed_model,
         ollama_url=s.ollama_base_url,
     )
+    from core.llm_factory import apply_langsmith_env
+
+    if apply_langsmith_env():
+        log.info("LangSmith tracing enabled", project=s.langsmith_project)
     # Warm up vector store connection on startup
     try:
         from core.vector_store import get_vector_store
@@ -121,6 +135,8 @@ app.include_router(chat.router)
 app.include_router(models.router)
 app.include_router(rag.router)
 app.include_router(graph.router)
+app.include_router(langchain_api.router)
+app.include_router(langgraph_api.router)
 app.include_router(patient_wellness.router)
 app.include_router(observations.router)
 app.include_router(graphql_app, prefix="/graphql")
@@ -132,6 +148,7 @@ async def root():
     s = get_settings()
     return {
         "service": "localAIStack",
+        "default_model": s.default_model,
         "llm_model": s.llm_model,
         "embed_model": s.embed_model,
         "docs": "/docs",

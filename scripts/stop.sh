@@ -37,7 +37,7 @@ fi
 
 echo ""
 echo -e "${GREEN}localAIStack stopped.${NC}"
-echo "  Data persists in ./volumes/  — run ./scripts/start.sh to resume."
+echo "  Data persists in ./volumes/ (incl. LangGraph checkpoints in ./volumes/state) — run ./scripts/start.sh to resume."
 echo "  Qdrant (unified vector store) is now offline."
 echo "  If the RealityEngine universe is running, restart it after: cd ../RealityEngine_CI && ./startUniverse.sh"
 echo ""

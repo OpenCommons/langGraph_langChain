@@ -30,7 +30,10 @@ else
 fi
 
 source .env
-LLM_MODEL="${LLM_MODEL:-nemotron-3-nano:4b}"
+# DEFAULT_MODEL is a registry id; LLM_MODEL (an Ollama tag) overrides it.
+DEFAULT_MODEL="${DEFAULT_MODEL:-llama3.1-8b}"
+LLM_MODEL="${LLM_MODEL:-$(registry_field "$DEFAULT_MODEL" tag)}"
+LLM_MODEL="${LLM_MODEL:-$DEFAULT_MODEL}"
 EMBED_MODEL="${EMBED_MODEL:-ternary-bonsai:4}"
 
 # ── Registry check ────────────────────────────────────────────────────────────
@@ -134,4 +137,5 @@ echo "    make ingest FILE=./data/<domain>/documents/your_doc.pdf"
 echo "    make query  Q='What is in my knowledge base?'"
 echo "    make models                              # registry + what's installed"
 echo "    make model-pull ID=nemotron-3-nano-4b    # add another registered model"
+echo "    make langchain-demo / make langgraph-demo   # LangChain / LangGraph demos"
 echo ""

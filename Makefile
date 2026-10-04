@@ -1,4 +1,4 @@
-.PHONY: setup start stop up down logs health query ingest models models-installed ollama-check model-pull model-info provider-conformance clean
+.PHONY: pull-model langchain-demo langgraph-demo setup start stop up down logs health query ingest models models-installed ollama-check model-pull model-info provider-conformance clean
 
 # ── Lifecycle ─────────────────────────────────────────────────────────────────
 setup:
@@ -49,6 +49,11 @@ ollama-check:
 model-pull:
 	@bash scripts/lib/models_registry.sh --pull $(ID)
 
+# Pull the default model (DEFAULT_MODEL in .env, default llama3.1-8b → llama3.1:8b)
+pull-model:
+	@set -a; [ -f .env ] && . ./.env; set +a; \
+		bash scripts/lib/models_registry.sh --pull "$${DEFAULT_MODEL:-llama3.1-8b}"
+
 # Usage: make model-info ID=nemotron-3-nano-4b   (requires the API to be up)
 model-info:
 	@curl -s http://localhost:4000/models/$(ID) | python3 -m json.tool
@@ -72,6 +77,22 @@ agent:
 	@curl -s -X POST http://localhost:4000/graph/agent \
 		-H "Content-Type: application/json" \
 		-d '{"messages": [{"role": "user", "content": "$(Q)"}]}' | python3 -m json.tool
+
+# ── LangChain / LangGraph demos (API must be up; default model llama3.1-8b) ──
+# Usage: make langchain-demo [TEXT="..."]
+langchain-demo:
+	@curl -s -X POST http://localhost:4000/lc/summarize \
+		-H "Content-Type: application/json" \
+		-d '{"text": "$(or $(TEXT),LangChain composes prompts and models and parsers into chains with LCEL.)"}' | python3 -m json.tool
+	@curl -s -X POST http://localhost:4000/lc/tools \
+		-H "Content-Type: application/json" \
+		-d '{"prompt": "What is (12 + 3) * 4?"}' | python3 -m json.tool
+
+# Usage: make langgraph-demo [Q="..."]
+langgraph-demo:
+	@curl -s -X POST http://localhost:4000/lg/agent/run \
+		-H "Content-Type: application/json" \
+		-d '{"thread_id": "demo", "message": "$(or $(Q),What is 17 * 23?)"}' | python3 -m json.tool
 
 # ── Cleanup ───────────────────────────────────────────────────────────────────
 clean:
