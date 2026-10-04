@@ -32,7 +32,20 @@ async def lifespan(app: FastAPI):
         llm_model=s.llm_model,
         embed_model=s.embed_model,
         ollama_url=s.ollama_base_url,
+        backend="mlx" if s.use_mlx else "ollama",
+        mlx_url=s.mlx_base_url if s.use_mlx else None,
     )
+    if s.use_mlx:
+        import httpx
+
+        try:
+            httpx.get(f"{s.ollama_base_url}/api/tags", timeout=1.0).raise_for_status()
+            log.warning(
+                "USE_MLX=true but Ollama is also running — both runtimes share memory; "
+                "stop Ollama or run `make use-ollama`"
+            )
+        except Exception:
+            pass
     from core.llm_factory import apply_langsmith_env
 
     if apply_langsmith_env():

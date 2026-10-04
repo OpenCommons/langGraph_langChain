@@ -22,6 +22,9 @@ This repo provides local AI/RAG/vector services and a RealityEngine bridge. It s
 - `services/api/core/embeddings.py`: embedding support.
 - `services/api/core/vector_store.py`: vector store behavior.
 - `services/api/core/topology_builder.py`: topology/graph construction.
+- MLX backend (exclusive with Ollama, `USE_MLX` in `.env`): `llm_factory` returns
+  `ChatOpenAI` → host-native `mlx_lm.server` (`:8081`); `scripts/start-mlx.sh`,
+  `scripts/stop-mlx.sh`, `make use-mlx` / `make use-ollama`; see `docs/MLX_INTEGRATION.md`.
 - `services/api/core/model_registry.py`: model registry loader; joins model registry
   metadata with the `.env` selection and live Ollama tags.
 - `services/api/graphs/`: agent and RAG graph flows, plus the LangGraph

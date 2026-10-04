@@ -14,6 +14,9 @@ big for the host are all distinguishable from one response.
 The registry is data, not policy: nothing here downloads or selects a model.
 ``scripts/lib/models_registry.sh`` reads the same file for ``setup.sh``
 validation and ``make model-pull``.
+
+Exactly one backend is active, chosen by ``USE_MLX``: Ollama (default) or Apple
+MLX. Only the active backend's models are listed and its runtime is queried.
 """
 
 from __future__ import annotations
@@ -53,7 +56,7 @@ def _default_paths() -> tuple[pathlib.Path, ...]:
 
 
 class ModelSource(BaseModel):
-    kind: str  # "ollama-library" | "modelfile"
+    kind: str  # "ollama-library" | "modelfile" | "huggingface-mlx"
     ref: str | None = None
     modelfile: str | None = None
     gguf: str | None = None
@@ -68,6 +71,7 @@ class ModelEntry(BaseModel):
     publisher: str
     family: str
     role: str  # "llm" | "embedding"
+    backend: str = "ollama"  # "ollama" | "mlx"
     source: ModelSource
     parameters: str | None = None
     quantization: str | None = None
@@ -105,6 +109,9 @@ class ModelRegistry(BaseModel):
 
     def by_id(self, model_id: str) -> ModelEntry | None:
         return next((m for m in self.models if m.id == model_id), None)
+
+    def for_backend(self, backend: str) -> list[ModelEntry]:
+        return [m for m in self.models if m.backend == backend]
 
     def by_tag(self, tag: str) -> ModelEntry | None:
         """Look up by Ollama tag, honouring aliases and the implicit ``:latest``."""
@@ -187,6 +194,22 @@ async def installed_tags(base_url: str | None = None) -> tuple[list[str], str]:
         return [], f"unreachable: {str(exc)[:160]}"
 
 
+async def mlx_installed_models(base_url: str | None = None) -> tuple[list[str], str]:
+    """Model ids served by the live ``mlx_lm.server`` (OpenAI ``GET /v1/models``).
+
+    Same ``(ids, status)`` contract as ``installed_tags``.
+    """
+    s = get_settings()
+    url = (base_url or s.mlx_base_url).rstrip("/")
+    try:
+        async with httpx.AsyncClient(timeout=_TAGS_TIMEOUT_S) as c:
+            r = await c.get(f"{url}/models")
+            r.raise_for_status()
+            return [m["id"] for m in r.json().get("data", [])], "ok"
+    except Exception as exc:
+        return [], f"unreachable: {str(exc)[:160]}"
+
+
 async def installed_version(base_url: str | None = None) -> str | None:
     """Version reported by the live Ollama host, or None when unreachable."""
     s = get_settings()
@@ -230,18 +253,36 @@ def host_ram_gb() -> float | None:
         return None
 
 
-async def resolve_models(role: str | None = None) -> dict:
-    """Join registry metadata with .env selection and live Ollama state."""
+def active_backend() -> str:
+    """The exclusive inference backend selected by ``USE_MLX``."""
+    return "mlx" if get_settings().use_mlx else "ollama"
+
+
+async def resolve_models(role: str | None = None, backend: str | None = None) -> dict:
+    """Join registry metadata with .env selection and live runtime state.
+
+    ``backend`` defaults to the active one (``USE_MLX``). Only that runtime is
+    queried; entries of the other backend are filtered out.
+    """
     registry = load_registry()
     s = get_settings()
-    (installed, ollama_status), running_version = await asyncio.gather(
-        installed_tags(), installed_version()
-    )
+    backend = backend or active_backend()
+    if backend == "mlx":
+        (installed, runtime_status), running_version = await mlx_installed_models(), None
+    else:
+        (installed, runtime_status), running_version = await asyncio.gather(
+            installed_tags(), installed_version()
+        )
     ram = host_ram_gb()
 
-    selected = {"llm": s.llm_model, "embedding": s.embed_model}
+    if backend == "mlx":
+        selected = {"llm": s.llm_model}
+    else:
+        selected = {"llm": s.llm_model, "embedding": s.embed_model}
 
-    entries = [m for m in registry.models if role is None or m.role == role]
+    entries = [
+        m for m in registry.for_backend(backend) if role is None or m.role == role
+    ]
     resolved = []
     for m in entries:
         selected_for = [r for r, tag in selected.items() if registry.by_tag(tag) is m]
@@ -268,15 +309,25 @@ async def resolve_models(role: str | None = None) -> dict:
         else version_tuple(running_version) < version_tuple(pinned)
     )
 
+    runtime_key = {"status": runtime_status}
     return {
         "registry_version": registry.version,
         "registry_path": str(registry_path()),
+        "active_backend": backend,
+        "backend_status": {
+            "active": backend,
+            "reason": "exclusive selection to conserve memory",
+        },
         "runtime": {
             **registry.runtime.model_dump(),
             "running_version": running_version,
             "behind_pin": behind_pin,
         },
-        "ollama": {"status": ollama_status, "base_url": s.ollama_base_url},
+        **(
+            {"mlx": {**runtime_key, "base_url": s.mlx_base_url}}
+            if backend == "mlx"
+            else {"ollama": {**runtime_key, "base_url": s.ollama_base_url}}
+        ),
         "host_ram_gb": None if ram is None else round(ram, 1),
         "selected": selected,
         "unregistered_selections": unregistered or None,

@@ -20,11 +20,21 @@ source of truth. `config.Settings` resolves it to the Ollama tag `llama3.1:8b`
 `make pull-model` pulls the default; any registered model works per request via
 `core.llm_factory.get_chat_model("<id or tag>")`.
 
+## MLX backend (exclusive alternative)
+
+On Apple Silicon the chat backend can be Apple MLX instead of Ollama. The choice
+is exclusive and global (`USE_MLX=true|false` in `.env`), not per-request, because
+memory is the constraint. With `USE_MLX=true`, `get_chat_model()` returns a
+`ChatOpenAI` pointed at the host-native `mlx_lm.server` (`MLX_BASE_URL`); with
+`false` it returns `ChatOllama`. Asking for a model registered for the inactive
+backend raises `ModelBackendError`. Embeddings stay on Ollama. See
+[`MLX_INTEGRATION.md`](MLX_INTEGRATION.md).
+
 ## Layout
 
 | Path | Contents |
 |---|---|
-| `core/llm_factory.py` | `get_chat_model()` factory (ChatOllama), logging callback, LangSmith env export |
+| `core/llm_factory.py` | `get_chat_model()` factory (ChatOllama, or ChatOpenAI for MLX), logging callback, LangSmith env export |
 | `chains/lcel.py` | prompt templates; summarize, Q&A and Pydantic structured-output chains |
 | `chains/tools.py` | `calculator` (safe AST evaluator), `current_time`, retrieval-tool wrapper |
 | `chains/rag.py` | load → split → ingest → retriever chain (Qdrant via `core/vector_store.py`) |

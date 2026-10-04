@@ -1,4 +1,4 @@
-.PHONY: pull-model langchain-demo langgraph-demo setup start stop up down logs health query ingest models models-installed ollama-check model-pull model-info provider-conformance clean
+.PHONY: mlx-start mlx-stop mlx-status use-mlx use-ollama pull-model langchain-demo langgraph-demo setup start stop up down logs health query ingest models models-installed ollama-check model-pull model-info provider-conformance clean
 
 # ── Lifecycle ─────────────────────────────────────────────────────────────────
 setup:
@@ -19,6 +19,29 @@ up:
 
 down:
 	@docker compose down
+
+# ── MLX (exclusive alternative to Ollama; host-native, Apple Silicon) ─────────
+# Usage: make mlx-start ID=RadixArk/Muse-Glimmer-q4-MLX
+mlx-start:
+	@bash scripts/start-mlx.sh $(ID)
+
+mlx-stop:
+	@bash scripts/stop-mlx.sh
+
+mlx-status:
+	@curl -sf http://localhost:8081/v1/models >/dev/null 2>&1 \
+		&& echo "MLX running on :8081" || { echo "MLX not running"; exit 1; }
+
+# Switch the exclusive backend in .env and restart (stop first, with the old setting).
+use-mlx:
+	@bash scripts/stop.sh
+	@bash scripts/lib/env_set.sh USE_MLX true
+	@bash scripts/start.sh
+
+use-ollama:
+	@bash scripts/stop.sh
+	@bash scripts/lib/env_set.sh USE_MLX false
+	@bash scripts/start.sh
 
 # ── Observability ─────────────────────────────────────────────────────────────
 logs:
