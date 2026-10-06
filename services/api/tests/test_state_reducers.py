@@ -1,6 +1,7 @@
 """Algebraic properties of shared graph-state reducers."""
 
-from hypothesis import given, strategies as st
+from hypothesis import given
+from hypothesis import strategies as st
 
 from graphs.state import reduce_latest, reduce_max, reduce_set_union
 

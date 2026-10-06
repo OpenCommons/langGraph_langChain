@@ -3,13 +3,23 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Hashable
-from typing import Annotated, TypeVar, TypedDict
+from typing import Annotated, Any, Protocol, TypedDict, TypeVar
 
 from langchain_core.messages import BaseMessage
 from langgraph.graph import add_messages
 
 _ItemT = TypeVar("_ItemT", bound=Hashable)
-_ValueT = TypeVar("_ValueT")
+
+
+class _SupportsLessThan(Protocol):
+    def __lt__(self, other: Any, /) -> bool: ...
+
+
+class _SupportsGreaterThan(Protocol):
+    def __gt__(self, other: Any, /) -> bool: ...
+
+
+_ValueT = TypeVar("_ValueT", bound=_SupportsLessThan | _SupportsGreaterThan)
 
 
 class BaseGraphState(TypedDict):
