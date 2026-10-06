@@ -38,6 +38,22 @@ source of truth. `config.Settings` resolves it to the Ollama tag `llama3.1:8b`
 The pre-existing `/graph/rag` and `/graph/agent` (Reality Engine-bound graphs)
 and `/rag/*`, `/chat` are unchanged.
 
+## Shared graph state and reducers
+
+`graphs/state.py` defines `BaseGraphState` with the common `messages` field.
+Domain-specific states extend `StateFactory` and annotate their additional
+fields with a reducer: `reduce_set_union` for unordered set accumulation,
+`reduce_max` for monotonic counters, and `reduce_latest` for values whose total
+ordering represents recency (for example, timestamps or versioned values).
+These reducers are associative, commutative, and idempotent, so parallel graph
+updates converge regardless of merge order.
+
+The `messages` field deliberately reuses LangChain's `add_messages`: it preserves
+conversation order and is not commutative for arbitrary messages. Use it for
+ordered chat history, not as a join-semilattice reducer. `reduce_latest` also
+needs values with a meaningful recency ordering; plain text is only ordered
+lexicographically.
+
 ## Endpoints
 
 ```bash
@@ -75,5 +91,5 @@ curl -s localhost:4000/lg/supervisor/run  -d '{"task":"add 2+2 and write it up"}
 scripted fake chat model in `tests/fakes.py`, so no Ollama is required:
 
 ```bash
-pytest services/api/tests --ignore=services/api/tests/e2e
+make test
 ```

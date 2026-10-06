@@ -8,7 +8,7 @@ returned to the caller. Resume the same ``thread_id`` with
 
 from __future__ import annotations
 
-from typing import Literal, TypedDict
+from typing import Annotated, Literal
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage
@@ -16,13 +16,15 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import interrupt
 
+from graphs.state import StateFactory, reduce_latest
 
-class ApprovalState(TypedDict, total=False):
+
+class ApprovalState(StateFactory, total=False):
     request: str
     proposal: str
     approved: bool
     feedback: str
-    result: str
+    result: Annotated[str | None, reduce_latest("result")]
 
 
 def build_approval_graph(llm: BaseChatModel, checkpointer: BaseCheckpointSaver):

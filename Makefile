@@ -1,8 +1,11 @@
-.PHONY: pull-model langchain-demo langgraph-demo setup start stop up down logs health query ingest models models-installed ollama-check model-pull model-info provider-conformance db-setup governance evals loadtest ha-up ha-down clean
+.PHONY: pull-model langchain-demo langgraph-demo setup test start stop up down logs health query ingest models models-installed ollama-check model-pull model-info provider-conformance db-setup governance evals loadtest ha-up ha-down clean
 
 # ── Lifecycle ─────────────────────────────────────────────────────────────────
 setup:
 	@bash scripts/setup.sh
+
+test:
+	@python3 -m pytest services/api/tests --ignore=services/api/tests/e2e
 
 start:
 	@bash scripts/start.sh
