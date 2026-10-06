@@ -33,10 +33,26 @@ source of truth. `config.Settings` resolves it to the Ollama tag `llama3.1:8b`
 | `graphs/checkpoint.py` | SQLite checkpointer; `thread_id` selects the conversation |
 | `graphs/approval_graph.py` | human-in-the-loop: `interrupt()` before executing a plan |
 | `graphs/supervisor_graph.py` | supervisor routing to `math` / `writer` workers, bounded steps |
+| `graphs/state.py` | shared message state schema and deterministic reducers |
 | `routers/langchain_api.py`, `routers/langgraph_api.py` | HTTP surface |
 
 The pre-existing `/graph/rag` and `/graph/agent` (Reality Engine-bound graphs)
 and `/rag/*`, `/chat` are unchanged.
+
+## Shared graph state and reducers
+
+Graphs use `BaseGraphState` for messages and extend `StateFactory` for
+domain-specific fields. State fields that may be merged from parallel updates
+should use reducers whose result is independent of update order: set union,
+numeric maximum, or a naturally ordered value. These reducers are
+commutative, associative, and idempotent, so retries and merge ordering do not
+change their result. `reduce_latest` selects the greatest value; timestamps
+therefore select the newest timestamp, while unordered status values need an
+explicit version or timestamp to express chronology.
+
+`add_messages` is intentionally different: it preserves message order and is
+not commutative. It remains appropriate for conversational history, whose order
+is part of the data rather than a merge-independent aggregate.
 
 ## Endpoints
 
@@ -75,5 +91,6 @@ curl -s localhost:4000/lg/supervisor/run  -d '{"task":"add 2+2 and write it up"}
 scripted fake chat model in `tests/fakes.py`, so no Ollama is required:
 
 ```bash
+make test
 pytest services/api/tests --ignore=services/api/tests/e2e
 ```
