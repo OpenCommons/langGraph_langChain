@@ -138,7 +138,29 @@ services:
       timeout: 5s
       retries: 5
 
-  # ── RAG / LangGraph Orchestration API ────────────────────────────────────────
+    # ── Durable LangGraph state (PostgreSQL + pgvector) ──────────────────────────
+  # Backs PostgresSaver (thread checkpoints) and PostgresStore (cross-thread
+  # memory) when CHECKPOINT_BACKEND=postgres. Tables are created by
+  # `make db-setup` (or at API startup when POSTGRES_AUTO_SETUP=true).
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: localai_postgres
+    restart: unless-stopped
+    ports:
+      - "4432:5432"
+    environment:
+      POSTGRES_USER: "${POSTGRES_USER:-localai}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-changeme-local-dev}"
+      POSTGRES_DB: "${POSTGRES_DB:-localai}"
+    volumes:
+      - ./volumes/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+# ── RAG / LangGraph Orchestration API ────────────────────────────────────────
   api:
     build:
       context: ./services/api
@@ -161,6 +183,29 @@ services:
       LANGSMITH_API_KEY: "${LANGSMITH_API_KEY:-}"
       LANGSMITH_PROJECT: "${LANGSMITH_PROJECT:-localaistack}"
       CHECKPOINT_DB_PATH: "${CHECKPOINT_DB_PATH:-/app/state/checkpoints.sqlite}"
+      # sqlite (default) | postgres — postgres uses DATABASE_URL below.
+      CHECKPOINT_BACKEND: "${CHECKPOINT_BACKEND:-sqlite}"
+      DATABASE_URL: "${DATABASE_URL:-postgresql://${POSTGRES_USER:-localai}:${POSTGRES_PASSWORD:-changeme-local-dev}@postgres:5432/${POSTGRES_DB:-localai}}"
+      POSTGRES_AUTO_SETUP: "${POSTGRES_AUTO_SETUP:-true}"
+      # Model provider + tracing (docs/PROVIDERS_AND_TRACING.md). Provider API
+      # keys (OPENAI_API_KEY, ANTHROPIC_API_KEY, ...) and OTEL_* are passed
+      # through only when set in .env.
+      LLM_PROVIDER: "${LLM_PROVIDER:-ollama}"
+      LLM_BASE_URL: "${LLM_BASE_URL:-}"
+      TRACING_BACKEND: "${TRACING_BACKEND:-}"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "${OTEL_EXPORTER_OTLP_ENDPOINT:-}"
+      OTEL_EXPORTER_OTLP_HEADERS: "${OTEL_EXPORTER_OTLP_HEADERS:-}"
+      OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME:-localaistack-api}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+      GOOGLE_API_KEY: "${GOOGLE_API_KEY:-}"
+      # Governance (docs/GOVERNANCE.md). Set a secret so capability tokens
+      # survive restarts and work across replicas.
+      GOVERNANCE_ENABLED: "${GOVERNANCE_ENABLED:-true}"
+      GOVERNANCE_TOKEN_SECRET: "${GOVERNANCE_TOKEN_SECRET:-}"
+      GOVERNANCE_REQUIRE_TOKEN: "${GOVERNANCE_REQUIRE_TOKEN:-false}"
+      GOVERNANCE_CHAIN_PATH: "${GOVERNANCE_CHAIN_PATH:-/app/state/governance_chain.jsonl}"
+      GOVERNANCE_PREDICTIVE_ENABLED: "${GOVERNANCE_PREDICTIVE_ENABLED:-false}"
       EMBED_MODEL: "${EMBED_MODEL:-ternary-bonsai:4}"
       EMBED_DIM: "${EMBED_DIM:-768}"
       COLLECTION_NAME: "${COLLECTION_NAME:-localai_docs}"
@@ -207,6 +252,9 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
+        required: false
     extra_hosts:
       - "host.docker.internal:host-gateway"
     logging:

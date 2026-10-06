@@ -34,10 +34,19 @@ async def lifespan(app: FastAPI):
         embed_model=s.embed_model,
         ollama_url=s.ollama_base_url,
     )
-    from core.llm_factory import apply_langsmith_env
+    from core.tracing import setup_tracing
 
-    if apply_langsmith_env():
-        log.info("LangSmith tracing enabled", project=s.langsmith_project)
+    tracing = setup_tracing()
+    if tracing:
+        log.info("Tracing enabled", backend=tracing)
+    if s.checkpoint_backend == "postgres" and s.postgres_auto_setup:
+        try:
+            from graphs.checkpoint import setup_persistence
+
+            await asyncio.to_thread(setup_persistence)
+            log.info("Postgres checkpointer/store ready")
+        except Exception as e:
+            log.warning("Postgres persistence not ready at startup", error=str(e))
     # Warm up vector store connection on startup
     try:
         from core.vector_store import get_vector_store

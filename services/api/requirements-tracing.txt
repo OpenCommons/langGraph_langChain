@@ -1,0 +1,5 @@
+# Optional OpenTelemetry tracing (TRACING_BACKEND=otel).
+#   pip install -r requirements.txt -r requirements-tracing.txt
+opentelemetry-sdk==1.45.1
+opentelemetry-exporter-otlp-proto-http==1.45.1
+openinference-instrumentation-langchain==0.1.78

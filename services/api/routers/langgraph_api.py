@@ -4,6 +4,7 @@
 POST /lg/agent/run             ReAct agent, durable per thread_id
 POST /lg/agent/stream          same, streaming graph events as SSE
 GET  /lg/agent/state/{thread}  checkpointed messages for a thread
+PUT/GET /lg/memory/{user}      cross-thread long-term memory (BaseStore)
 POST /lg/approval/start        draft a plan and pause for human approval
 POST /lg/approval/resume       resume a paused thread with a decision
 POST /lg/supervisor/run        supervisor → workers multi-agent workflow
@@ -30,6 +31,7 @@ from governance.tools import govern_tools
 from graphs.approval_graph import build_approval_graph
 from graphs.checkpoint import get_checkpointer
 from graphs.react_agent import build_react_agent
+from graphs.store import get_store
 from graphs.supervisor_graph import build_supervisor_graph, initial_state
 
 router = APIRouter(prefix="/lg", tags=["langgraph"])
@@ -97,7 +99,7 @@ def agent_run(
 ):
     thread_id = body.thread_id or str(uuid.uuid4())
     tools, lamport = _agent_tools(body, thread_id, x_capability_token)
-    graph = build_react_agent(llm, tools, get_checkpointer())
+    graph = build_react_agent(llm, tools, get_checkpointer(), store=get_store())
     out = graph.invoke({"messages": [HumanMessage(content=body.message)]}, _config(thread_id))
     if lamport is not None:
         # Lamport time after the whole run (every tool admission ticked the clock).
@@ -113,7 +115,7 @@ def agent_stream(
 ):
     thread_id = body.thread_id or str(uuid.uuid4())
     tools, lamport = _agent_tools(body, thread_id, x_capability_token)
-    graph = build_react_agent(llm, tools, get_checkpointer())
+    graph = build_react_agent(llm, tools, get_checkpointer(), store=get_store())
 
     def events():
         head = (
@@ -138,6 +140,24 @@ def agent_state(thread_id: str, llm: BaseChatModel = Depends(get_llm)):
     graph = build_react_agent(llm, base_tools(), get_checkpointer())
     values = graph.get_state(_config(thread_id)).values
     return {"thread_id": thread_id, "messages": jsonable(values.get("messages", []))}
+
+
+class MemoryBody(BaseModel):
+    key: str
+    value: dict[str, Any]
+
+
+@router.put("/memory/{user_id}")
+def memory_put(user_id: str, body: MemoryBody):
+    """Cross-thread long-term memory (BaseStore; PostgreSQL when configured)."""
+    get_store().put(("memories", user_id), body.key, body.value)
+    return {"user_id": user_id, "key": body.key}
+
+
+@router.get("/memory/{user_id}")
+def memory_list(user_id: str):
+    items = get_store().search(("memories", user_id), limit=100)
+    return {"user_id": user_id, "memories": {i.key: i.value for i in items}}
 
 
 class ApprovalStart(BaseModel):

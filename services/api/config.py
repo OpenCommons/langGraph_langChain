@@ -23,6 +23,14 @@ class Settings(BaseSettings):
     # left empty it is derived from DEFAULT_MODEL.
     default_model: str = DEFAULT_MODEL_ID
     llm_model: str = ""
+    # Chat-model provider: "ollama" (default, local) or any langchain
+    # init_chat_model provider — openai, anthropic, google_vertexai,
+    # google_genai, azure_openai, ... For a non-ollama provider LLM_MODEL must
+    # be that provider's model name; keys come from the provider's own env var
+    # (OPENAI_API_KEY, ANTHROPIC_API_KEY, ...). Nothing is hard-coded.
+    llm_provider: str = "ollama"
+    # Optional endpoint override for non-ollama providers (gateways, proxies).
+    llm_base_url: str = ""
     embed_model: str = "ternary-bonsai:4"
     # Output dimension of embed_model. Must match the existing Qdrant collection;
     # recreate the collection if you swap to a model with a different dim.
@@ -41,12 +49,25 @@ class Settings(BaseSettings):
     graph_recursion_limit: int = 25
     # SQLite file holding thread-scoped graph checkpoints (":memory:" for tests).
     checkpoint_db_path: str = "state/checkpoints.sqlite"
+    # Persistence backend for graph checkpoints and the cross-thread store:
+    # "sqlite" (default; store is in-memory) or "postgres" (PostgresSaver +
+    # PostgresStore, needs DATABASE_URL).
+    checkpoint_backend: str = "sqlite"
+    database_url: str = ""
+    postgres_pool_size: int = 10
+    # Create / migrate the Postgres tables at API startup. Turn off when a
+    # one-shot `make db-setup` job owns migrations (e.g. several replicas).
+    postgres_auto_setup: bool = True
 
     # LangSmith tracing (optional). Exported to the environment at startup,
     # where LangChain reads it; off unless langsmith_tracing is true.
     langsmith_tracing: bool = False
     langsmith_api_key: str = ""
     langsmith_project: str = "localaistack"
+    # Tracing backend: "" / "none", "langsmith" or "otel" (OpenTelemetry +
+    # OpenInference; endpoint via OTEL_EXPORTER_OTLP_ENDPOINT). LANGSMITH_TRACING=true
+    # with no TRACING_BACKEND keeps selecting langsmith.
+    tracing_backend: str = ""
 
     # Governance (OEE completeness layer; docs/GOVERNANCE.md)
     governance_enabled: bool = True
@@ -90,7 +111,7 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _resolve_llm_model(self) -> "Settings":
-        if not self.llm_model:
+        if not self.llm_model and self.llm_provider.lower() == "ollama":
             self.llm_model = resolve_model_tag(self.default_model, self.models_registry_path)
         return self
 
