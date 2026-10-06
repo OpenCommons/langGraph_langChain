@@ -4,6 +4,7 @@
 POST /lg/agent/run             ReAct agent, durable per thread_id
 POST /lg/agent/stream          same, streaming graph events as SSE
 GET  /lg/agent/state/{thread}  checkpointed messages for a thread
+GET  /lg/agent/history/{thread} checkpoint history for a thread
 POST /lg/approval/start        draft a plan and pause for human approval
 POST /lg/approval/resume       resume a paused thread with a decision
 POST /lg/supervisor/run        supervisor → workers multi-agent workflow
@@ -15,7 +16,7 @@ import json
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import BaseMessage, HumanMessage
@@ -93,6 +94,27 @@ def agent_state(thread_id: str, llm: BaseChatModel = Depends(get_llm)):
     graph = build_react_agent(llm, base_tools(), get_checkpointer())
     values = graph.get_state(_config(thread_id)).values
     return {"thread_id": thread_id, "messages": jsonable(values.get("messages", []))}
+
+
+@router.get("/agent/history/{thread_id}")
+def agent_history(
+    thread_id: str,
+    limit: int = Query(default=20, ge=1, le=100),
+    llm: BaseChatModel = Depends(get_llm),
+):
+    graph = build_react_agent(llm, base_tools(), get_checkpointer())
+    history = []
+    for snapshot in graph.get_state_history(_config(thread_id), limit=limit):
+        configurable = snapshot.config.get("configurable", {})
+        history.append(
+            {
+                "checkpoint_id": configurable.get("checkpoint_id"),
+                "created_at": snapshot.created_at,
+                "next": jsonable(snapshot.next),
+                "values": jsonable(snapshot.values),
+            }
+        )
+    return {"thread_id": thread_id, "history": history}
 
 
 class ApprovalStart(BaseModel):
