@@ -142,24 +142,6 @@ def agent_state(thread_id: str, llm: BaseChatModel = Depends(get_llm)):
     return {"thread_id": thread_id, "messages": jsonable(values.get("messages", []))}
 
 
-class MemoryBody(BaseModel):
-    key: str
-    value: dict[str, Any]
-
-
-@router.put("/memory/{user_id}")
-def memory_put(user_id: str, body: MemoryBody):
-    """Cross-thread long-term memory (BaseStore; PostgreSQL when configured)."""
-    get_store().put(("memories", user_id), body.key, body.value)
-    return {"user_id": user_id, "key": body.key}
-
-
-@router.get("/memory/{user_id}")
-def memory_list(user_id: str):
-    items = get_store().search(("memories", user_id), limit=100)
-    return {"user_id": user_id, "memories": {i.key: i.value for i in items}}
-
-
 class ApprovalStart(BaseModel):
     request: str
     thread_id: str | None = None
@@ -209,3 +191,21 @@ def supervisor_run(body: SupervisorBody, llm: BaseChatModel = Depends(get_llm)):
     graph = build_supervisor_graph(llm, get_checkpointer())
     out = graph.invoke(initial_state(body.task), _config(thread_id))
     return {"thread_id": thread_id, "messages": jsonable(out["messages"]), "steps": out["steps"]}
+
+
+class MemoryBody(BaseModel):
+    key: str
+    value: dict[str, Any]
+
+
+@router.put("/memory/{user_id}")
+def memory_put(user_id: str, body: MemoryBody):
+    """Cross-thread long-term memory (BaseStore; PostgreSQL when configured)."""
+    get_store().put(("memories", user_id), body.key, body.value)
+    return {"user_id": user_id, "key": body.key}
+
+
+@router.get("/memory/{user_id}")
+def memory_list(user_id: str):
+    items = get_store().search(("memories", user_id), limit=100)
+    return {"user_id": user_id, "memories": {i.key: i.value for i in items}}
