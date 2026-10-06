@@ -1,0 +1,19 @@
+{
+  "features": ["destructive", "exfiltration", "injection", "tool_risk"],
+  "saturation": 2,
+  "lexicon": {
+    "destructive": ["drop table", "rm -rf", "delete all", "wipe disk", "wipe data", "format disk", "truncate table"],
+    "exfiltration": ["api key", "password dump", "dump credentials", "send secrets", "private key", "exfiltrate"],
+    "injection": ["ignore previous instructions", "disregard your instructions", "reveal your system prompt"]
+  },
+  "tool_risk": {"calculator": 0.0, "current_time": 0.0, "retrieve_documents": 0.3},
+  "default_tool_risk": 0.6,
+  "rules": {
+    "version": "default-1",
+    "rules": [
+      {"name": "destructive_with_risky_tool", "bounds": {"destructive": [0.5, 1.0], "tool_risk": [0.5, 1.0]}},
+      {"name": "exfiltration_with_tool", "bounds": {"exfiltration": [0.5, 1.0], "tool_risk": [0.3, 1.0]}},
+      {"name": "injection_with_risky_tool", "bounds": {"injection": [0.5, 1.0], "tool_risk": [0.5, 1.0]}}
+    ]
+  }
+}
