@@ -53,6 +53,7 @@ curl -s localhost:4000/lc/rag        -d '{"question":"..."}' -H 'Content-Type: a
 curl -s localhost:4000/lg/agent/run    -d '{"message":"What is 17*23?","thread_id":"t1"}' -H 'Content-Type: application/json'
 curl -sN localhost:4000/lg/agent/stream -d '{"message":"...","thread_id":"t1"}' -H 'Content-Type: application/json'  # graph events (SSE)
 curl -s localhost:4000/lg/agent/state/t1
+curl -s localhost:4000/lg/agent/history/t1
 curl -s localhost:4000/lg/approval/start  -d '{"request":"rotate keys","thread_id":"a1"}' -H 'Content-Type: application/json'
 curl -s localhost:4000/lg/approval/resume -d '{"thread_id":"a1","approved":true}' -H 'Content-Type: application/json'
 curl -s localhost:4000/lg/supervisor/run  -d '{"task":"add 2+2 and write it up"}' -H 'Content-Type: application/json'
@@ -68,3 +69,8 @@ scripted fake chat model in `tests/fakes.py`, so no Ollama is required:
 ```bash
 pytest services/api/tests --ignore=services/api/tests/e2e
 ```
+
+`GET /lg/agent/history/{thread_id}` returns up to 20 of the thread's newest
+checkpoint snapshots (configurable with `?limit=`, from 1 to 100), including
+checkpoint IDs and serialized graph state. It is read-only and uses the
+configured checkpointer; the default deployment stores checkpoints in SQLite.
