@@ -8,16 +8,16 @@ supervisor after each worker, bounded by ``max_steps``.
 
 from __future__ import annotations
 
-import operator
-from typing import Annotated, Literal, TypedDict
+from typing import Annotated, Literal
 
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 
 from chains.tools import calculator
 from graphs.react_agent import build_react_agent
+from graphs.state import StateFactory, reduce_max
 
 WORKERS = ("math", "writer")
 Route = Literal["math", "writer", "FINISH"]
@@ -29,10 +29,9 @@ SUPERVISOR_PROMPT = (
 )
 
 
-class SupervisorState(TypedDict, total=False):
-    messages: Annotated[list[BaseMessage], operator.add]
+class SupervisorState(StateFactory, total=False):
     next: str
-    steps: int
+    steps: Annotated[int, reduce_max("steps")]
 
 
 def parse_route(text: str) -> Route:
