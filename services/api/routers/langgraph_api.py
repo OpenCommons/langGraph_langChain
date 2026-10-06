@@ -15,7 +15,7 @@ import json
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header, HTTPException, Response
 from fastapi.responses import StreamingResponse
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import BaseMessage, HumanMessage
@@ -25,6 +25,8 @@ from pydantic import BaseModel
 from chains.tools import base_tools
 from config import get_settings
 from core.llm_factory import get_chat_model, run_config
+from governance import get_engine
+from governance.tools import govern_tools
 from graphs.approval_graph import build_approval_graph
 from graphs.checkpoint import get_checkpointer
 from graphs.react_agent import build_react_agent
@@ -60,23 +62,66 @@ def _config(thread_id: str) -> dict:
 class AgentBody(BaseModel):
     message: str
     thread_id: str | None = None
+    # Sender's Lamport timestamp, if the caller keeps a logical clock.
+    lamport: int | None = None
+
+
+def _thread_texts(thread_id: str) -> list[str]:
+    """Text of every message already checkpointed for the thread."""
+    tup = get_checkpointer().get_tuple(_config(thread_id))
+    messages = tup.checkpoint["channel_values"].get("messages", []) if tup else []
+    return [str(m.content) for m in messages]
+
+
+def _agent_tools(body: AgentBody, thread_id: str, token: str | None):
+    """Base tools, each call verified over the whole thread and recorded (governance/)."""
+    s = get_settings()
+    if not s.governance_enabled:
+        return base_tools(), None
+    engine = get_engine()
+    if s.governance_require_token and not token:
+        raise HTTPException(401, "X-Capability-Token required")
+    lamport = engine.clock.receive(body.lamport) if body.lamport else engine.clock.tick()
+    context = [*_thread_texts(thread_id), body.message]
+    return govern_tools(
+        base_tools(), engine, thread_id=thread_id, context=context, token=token
+    ), lamport
 
 
 @router.post("/agent/run")
-def agent_run(body: AgentBody, llm: BaseChatModel = Depends(get_llm)):
+def agent_run(
+    body: AgentBody,
+    response: Response,
+    llm: BaseChatModel = Depends(get_llm),
+    x_capability_token: str | None = Header(default=None),
+):
     thread_id = body.thread_id or str(uuid.uuid4())
-    graph = build_react_agent(llm, base_tools(), get_checkpointer())
+    tools, lamport = _agent_tools(body, thread_id, x_capability_token)
+    graph = build_react_agent(llm, tools, get_checkpointer())
     out = graph.invoke({"messages": [HumanMessage(content=body.message)]}, _config(thread_id))
+    if lamport is not None:
+        # Lamport time after the whole run (every tool admission ticked the clock).
+        response.headers["X-Lamport"] = str(get_engine().clock.value)
     return {"thread_id": thread_id, "answer": out["messages"][-1].content}
 
 
 @router.post("/agent/stream")
-def agent_stream(body: AgentBody, llm: BaseChatModel = Depends(get_llm)):
+def agent_stream(
+    body: AgentBody,
+    llm: BaseChatModel = Depends(get_llm),
+    x_capability_token: str | None = Header(default=None),
+):
     thread_id = body.thread_id or str(uuid.uuid4())
-    graph = build_react_agent(llm, base_tools(), get_checkpointer())
+    tools, lamport = _agent_tools(body, thread_id, x_capability_token)
+    graph = build_react_agent(llm, tools, get_checkpointer())
 
     def events():
-        yield f"data: {json.dumps({'thread_id': thread_id})}\n\n"
+        head = (
+            {"thread_id": thread_id}
+            if lamport is None
+            else {"thread_id": thread_id, "lamport": lamport}
+        )
+        yield f"data: {json.dumps(head)}\n\n"
         for update in graph.stream(
             {"messages": [HumanMessage(content=body.message)]},
             _config(thread_id),

@@ -48,6 +48,27 @@ class Settings(BaseSettings):
     langsmith_api_key: str = ""
     langsmith_project: str = "localaistack"
 
+    # Governance (OEE completeness layer; docs/GOVERNANCE.md)
+    governance_enabled: bool = True
+    # HMAC secret for capability tokens. Empty = a random per-process secret
+    # (tokens die with the process and cannot be shared between replicas).
+    governance_token_secret: str = ""
+    # When true a capability token is mandatory; otherwise requests without one
+    # get the default token below.
+    governance_require_token: bool = False
+    governance_default_tools: str = "*"
+    governance_default_scopes: str = "agent:run,handoff:dispatch"
+    # JSONL file for the Merkle provenance chain ("" = in-memory only).
+    governance_chain_path: str = ""
+    governance_policy_path: str = ""
+    governance_klines_path: str = ""
+    governance_kline_max: int = 1000
+    governance_max_false_positives: int = 0
+    governance_predictive_enabled: bool = False
+    governance_predictive_threshold: float = 0.5
+    governance_predictive_horizon: int = 3
+    governance_predictive_margin: float = 0.1
+
     # Reality Engine stack URLs (PE = Perception Engine, RE = Reality Engine)
     # Docker: set to http://host.docker.internal:<port>
     # Local dev: http://localhost:<port>

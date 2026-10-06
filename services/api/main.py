@@ -9,6 +9,7 @@ from config import get_settings
 from core.bridge_binding import EngineAffinityMiddleware
 from routers import (
     chat,
+    governance_api,
     graph,
     health,
     langchain_api,
@@ -137,6 +138,7 @@ app.include_router(rag.router)
 app.include_router(graph.router)
 app.include_router(langchain_api.router)
 app.include_router(langgraph_api.router)
+app.include_router(governance_api.router)
 app.include_router(patient_wellness.router)
 app.include_router(observations.router)
 app.include_router(graphql_app, prefix="/graphql")
