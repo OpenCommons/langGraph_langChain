@@ -85,6 +85,7 @@ async def health():
     # RE_SSL_VERIFY mirrors the env var used by reality_bridge.py
     ssl_verify: bool | str = os.getenv("RE_SSL_VERIFY", "true").lower() not in ("false", "0", "no")
 
+    postgres = s.checkpoint_backend == "postgres"
     services: dict = {
         "api": "ok",
         "ollama": "unknown",
@@ -94,6 +95,8 @@ async def health():
         "pe": {"status": "unknown"},
         "re": {"status": "unknown"},
     }
+    if postgres:
+        services["postgres"] = "unknown"
 
     # ── Core service probes (run in parallel) ──────────────────────────────────
 
@@ -135,6 +138,17 @@ async def health():
         except Exception as exc:
             services["redis"] = f"error: {exc}"
 
+    def _check_postgres() -> None:
+        # Only probed when Postgres is the durable backend (CHECKPOINT_BACKEND=postgres).
+        try:
+            from graphs.checkpoint import postgres_pool
+
+            with postgres_pool().connection(timeout=3) as conn:
+                conn.execute("SELECT 1")
+            services["postgres"] = "ok"
+        except Exception as exc:
+            services["postgres"] = f"error: {exc}"
+
     # Run sync probes in a thread pool so they don't block the event loop
     loop = asyncio.get_event_loop()
     # Registry-aware target resolution (blocking urllib probes → executor)
@@ -145,6 +159,7 @@ async def health():
         _check_mlx() if s.use_mlx else _check_ollama(),
         loop.run_in_executor(None, _check_qdrant),
         loop.run_in_executor(None, _check_redis),
+        *([loop.run_in_executor(None, _check_postgres)] if postgres else []),
         _attach_pe_re(services, bridge_targets["pe_url"], bridge_targets["re_url"], ssl_verify),
     )
 
@@ -154,7 +169,8 @@ async def health():
     # Exactly one inference backend is active (USE_MLX); the other is not probed.
     backend = "mlx" if s.use_mlx else "ollama"
     services["ollama" if s.use_mlx else "mlx"] = "inactive (exclusive backend selection)"
-    core_ok = all(services[k] == "ok" for k in (backend, "qdrant", "redis"))
+    core = (backend, "qdrant", "redis", *(("postgres",) if postgres else ()))
+    core_ok = all(services[k] == "ok" for k in core)
     bridge_ok = all(services[k].get("status") == "ok" for k in ("pe", "re"))
 
     return {

@@ -1,0 +1,8 @@
+{
+  "name": "oee",
+  "invariants": ["terminates", "monotonic_state", "admissibility", "expected_tools", "forbidden_tools", "answer_contains"],
+  "critical": ["terminates", "monotonic_state", "admissibility"],
+  "min_pass_rate": 0.9,
+  "max_steps": 25,
+  "forbidden_tools": ["shell", "send_email"]
+}

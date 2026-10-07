@@ -70,6 +70,15 @@ curl -s localhost:4000/lg/supervisor/run  -d '{"task":"add 2+2 and write it up"}
 
 `/lc/rag` needs documents ingested first (`make ingest FILE=...`).
 
+## Persistence, governance and long-term memory
+
+- `CHECKPOINT_BACKEND=postgres` + `DATABASE_URL` swaps the SQLite checkpointer for
+  `PostgresSaver` and adds a `PostgresStore`; `PUT/GET /lg/memory/{user_id}` read and
+  write cross-thread memory. See [HA_DEPLOYMENT.md](HA_DEPLOYMENT.md).
+- Every `/lg/agent/*` tool call is verified over the whole thread and recorded by the
+  [governance layer](GOVERNANCE.md); `X-Capability-Token` scopes the tools available.
+- `LLM_PROVIDER` / `TRACING_BACKEND`: [PROVIDERS_AND_TRACING.md](PROVIDERS_AND_TRACING.md).
+
 ## Tests
 
 `tests/test_langchain_features.py` and `tests/test_langgraph_features.py` use the

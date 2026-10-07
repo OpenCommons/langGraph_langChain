@@ -1,4 +1,4 @@
-.PHONY: mlx-start mlx-stop mlx-status use-mlx use-ollama pull-model langchain-demo langgraph-demo setup start stop up down logs health query ingest models models-installed ollama-check model-pull model-info provider-conformance clean
+.PHONY: mlx-start mlx-stop mlx-status use-mlx use-ollama pull-model langchain-demo langgraph-demo setup start stop up down logs health query ingest models models-installed ollama-check model-pull model-info provider-conformance db-setup governance evals loadtest ha-up ha-down clean
 
 # ── Lifecycle ─────────────────────────────────────────────────────────────────
 setup:
@@ -50,8 +50,38 @@ logs:
 logs-api:
 	@docker compose logs -f api
 
+# /health covers ollama, qdrant, redis, the RE/PE bridge and — when
+# CHECKPOINT_BACKEND=postgres — postgres. The governance line is the Merkle
+# chain verdict (valid=false means the provenance log was tampered with).
 health:
 	@curl -s http://localhost:4000/health | python3 -m json.tool
+	@curl -s "http://localhost:4000/governance/chain?limit=1" | python3 -c \
+		"import sys,json; d=json.load(sys.stdin); print('governance chain: valid=%s length=%s lamport=%s' % (d['valid'], d['length'], d['lamport']))"
+
+governance:
+	@curl -s http://localhost:4000/governance/state | python3 -m json.tool
+
+# ── Persistence (PostgreSQL checkpointer + store) ─────────────────────────────
+# Needs CHECKPOINT_BACKEND=postgres and DATABASE_URL (see .env.example).
+db-setup:
+	@set -a; [ -f .env ] && . ./.env; set +a; python3 scripts/db_setup.py
+
+# ── Evaluation policies / load / HA ───────────────────────────────────────────
+# Policy-driven OEE evaluation of the golden dataset (fake LLM, no network).
+evals:
+	@python3 scripts/run_evals.py
+
+# Usage: make loadtest [BASE_URL=http://localhost:4000 CONCURRENCY=20 DURATION=30]
+loadtest:
+	@python3 scripts/loadtest/load_test.py --base-url $(or $(BASE_URL),http://localhost:4000) \
+		--concurrency $(or $(CONCURRENCY),20) --duration $(or $(DURATION),30)
+
+# HA stack: Postgres-backed state, 3 API replicas behind nginx (docs/HA_DEPLOYMENT.md)
+ha-up:
+	@docker compose -f docker-compose.yml -f docker-compose.ha.yml up -d --build
+
+ha-down:
+	@docker compose -f docker-compose.yml -f docker-compose.ha.yml down
 
 # ── Model registry ────────────────────────────────────────────────────────────
 # Registry = config/models.registry.json (available), .env = selected,

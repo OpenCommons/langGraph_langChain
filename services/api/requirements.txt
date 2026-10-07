@@ -22,6 +22,8 @@ qdrant-client==1.19.1
 redis==8.1.0
 langgraph-checkpoint-redis==0.5.2
 langgraph-checkpoint-sqlite==3.1.1
+langgraph-checkpoint-postgres==3.1.2
+psycopg[binary,pool]==3.3.6
 
 # Document loaders
 pypdf==6.19.0
