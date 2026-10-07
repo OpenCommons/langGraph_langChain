@@ -280,9 +280,7 @@ async def resolve_models(role: str | None = None, backend: str | None = None) ->
     else:
         selected = {"llm": s.llm_model, "embedding": s.embed_model}
 
-    entries = [
-        m for m in registry.for_backend(backend) if role is None or m.role == role
-    ]
+    entries = [m for m in registry.for_backend(backend) if role is None or m.role == role]
     resolved = []
     for m in entries:
         selected_for = [r for r, tag in selected.items() if registry.by_tag(tag) is m]
