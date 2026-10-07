@@ -8,6 +8,7 @@ from qdrant_client import QdrantClient
 
 from config import get_settings
 from core import engine_fanout
+from core.model_registry import host_ram_gb
 from core.registry_resolver import resolve_bridge_targets
 
 router = APIRouter()
@@ -88,13 +89,27 @@ async def health():
     services: dict = {
         "api": "ok",
         "ollama": "unknown",
+        "mlx": "unknown",
         "qdrant": "unknown",
         "redis": "unknown",
         "pe": {"status": "unknown"},
         "re": {"status": "unknown"},
     }
+    if postgres:
+        services["postgres"] = "unknown"
 
     # ── Core service probes (run in parallel) ──────────────────────────────────
+
+    async def _check_mlx() -> None:
+        try:
+            async with httpx.AsyncClient(timeout=3.0) as c:
+                r = await c.get(f"{s.mlx_base_url.rstrip('/')}/models")
+                r.raise_for_status()
+                models = [m["id"] for m in r.json().get("data", [])]
+            services["mlx"] = "ok"
+            services["mlx_models"] = models
+        except Exception as exc:
+            services["mlx"] = f"error: {exc}"
 
     async def _check_ollama() -> None:
         try:
@@ -141,7 +156,7 @@ async def health():
     # Every engine an unaddressed interaction writes to (core.engine_fanout).
     bridge_engines = await loop.run_in_executor(None, engine_fanout.interaction_targets)
     await asyncio.gather(
-        _check_ollama(),
+        _check_mlx() if s.use_mlx else _check_ollama(),
         loop.run_in_executor(None, _check_qdrant),
         loop.run_in_executor(None, _check_redis),
         *([loop.run_in_executor(None, _check_postgres)] if postgres else []),
@@ -151,13 +166,20 @@ async def health():
     # ── Status rollup ──────────────────────────────────────────────────────────
     # Overall "status" reflects only core services — the AI pipeline must work.
     # PE/RE are supplementary; their health is surfaced via "bridge" separately.
-    core = ("ollama", "qdrant", "redis", *(("postgres",) if postgres else ()))
+    # Exactly one inference backend is active (USE_MLX); the other is not probed.
+    backend = "mlx" if s.use_mlx else "ollama"
+    services["ollama" if s.use_mlx else "mlx"] = "inactive (exclusive backend selection)"
+    core = (backend, "qdrant", "redis", *(("postgres",) if postgres else ()))
     core_ok = all(services[k] == "ok" for k in core)
     bridge_ok = all(services[k].get("status") == "ok" for k in ("pe", "re"))
 
     return {
         "status": "ok" if core_ok else "degraded",
         "bridge": "ok" if bridge_ok else "degraded",
+        "backend": backend,
+        "active_backend": backend,
+        f"{backend}_status": services[backend],
+        "host_ram_gb": host_ram_gb(),
         "bridge_target": bridge_targets,
         "bridge_engines": [t.get("instance") or t["pe_url"] for t in bridge_engines],
         # Whether engines given identical localAI input answered alike.
