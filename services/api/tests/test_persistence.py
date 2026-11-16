@@ -94,7 +94,25 @@ def test_health_probes_postgres_only_when_configured(monkeypatch):
     _postgres(monkeypatch)
     monkeypatch.setattr(checkpoint, "_pool", _Boom())
     body = asyncio.run(run())
-    assert body["services"]["postgres"].startswith("error") and body["status"] == "degraded"
+    assert body["services"]["postgres"] == "error: probe failed"
+    assert body["status"] == "degraded"
+
+
+def test_bridge_probe_errors_do_not_expose_exception_details(monkeypatch):
+    class _FailingClient:
+        async def __aenter__(self):
+            raise RuntimeError("internal endpoint credentials")
+
+    monkeypatch.setattr(health.httpx, "AsyncClient", lambda **_: _FailingClient())
+
+    assert asyncio.run(health._check_pe("http://private-pe", True)) == {
+        "status": "unreachable",
+        "error": "probe failed",
+    }
+    assert asyncio.run(health._check_re("http://private-re", True)) == {
+        "status": "unreachable",
+        "error": "probe failed",
+    }
 
 
 def test_memory_endpoints_share_a_store_across_threads():
