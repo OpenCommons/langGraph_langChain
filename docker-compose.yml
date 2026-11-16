@@ -172,6 +172,11 @@ services:
     environment:
       # Ollama running natively — reachable from Docker via host.docker.internal
       OLLAMA_BASE_URL: "http://host.docker.internal:11434"
+      # Exclusive backend (memory-constrained): USE_MLX=true routes chat to the
+      # host-native mlx_lm.server instead of Ollama. Only read when USE_MLX=true.
+      USE_MLX: "${USE_MLX:-false}"
+      MLX_BASE_URL: "${MLX_BASE_URL:-http://host.docker.internal:8081/v1}"
+      MLX_MODEL: "${MLX_MODEL:-muse-glimmer}"
       QDRANT_HOST: "qdrant"
       QDRANT_PORT: "6333"
       REDIS_URL: "redis://redis:6379"

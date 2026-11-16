@@ -113,11 +113,20 @@ def test_shipped_registry_fields_are_in_range():
         assert m.role in ("llm", "embedding"), f"{m.id}: bad role {m.role}"
         assert m.install in ("selected", "on-demand", "modelfile"), f"{m.id}: bad install"
         assert m.status in ("supported", "experimental", "broken"), f"{m.id}: bad status"
-        assert m.source.kind in ("ollama-library", "modelfile"), f"{m.id}: bad source kind"
+        assert m.source.kind in ("ollama-library", "modelfile", "huggingface-mlx"), (
+            f"{m.id}: bad source kind"
+        )
+        assert m.backend in ("ollama", "mlx"), f"{m.id}: bad backend"
         if m.role == "embedding":
             assert m.embed_dim, f"{m.id}: embedding model must declare embed_dim"
         if m.source.kind == "modelfile":
             assert m.source.modelfile, f"{m.id}: modelfile source must name a Modelfile"
+
+
+def test_shipped_registry_has_muse_glimmer_mlx_entry():
+    entry = mr.load_registry(force_refresh=True).by_id("muse-glimmer")
+    assert entry is not None and entry.backend == "mlx"
+    assert entry.tag == "RadixArk/Muse-Glimmer-q4-MLX"
 
 
 def test_shipped_registry_role_defaults_exist():

@@ -17,22 +17,31 @@ info "Stopping Docker services (Qdrant, Redis, API, WebUI, Loki, Grafana)..."
 docker compose down
 ok "Docker services stopped"
 
-# ── Ollama ────────────────────────────────────────────────────────────────────
-# Only stop Ollama if WE started it (pid file exists).
-# Avoids killing an Ollama instance the user started separately.
-if [[ -f /tmp/ollama.pid ]]; then
-    PID=$(cat /tmp/ollama.pid)
-    if kill -0 "$PID" 2>/dev/null; then
-        info "Stopping Ollama (pid $PID)..."
-        kill "$PID"
-        rm -f /tmp/ollama.pid
-        ok "Ollama stopped"
-    else
-        warn "Ollama pid $PID not running — skipping"
-        rm -f /tmp/ollama.pid
-    fi
+# ── Inference backend (exclusive: stop only the one selected by USE_MLX) ──────
+USE_MLX=false
+if [[ -f .env ]]; then
+    USE_MLX="$(grep -E '^USE_MLX=' .env | tail -1 | cut -d= -f2- | tr -d '"' | tr -d "'" || true)"
+fi
+if [[ "${USE_MLX:-false}" == "true" ]]; then
+    bash "$ROOT_DIR/scripts/stop-mlx.sh"
 else
-    warn "Ollama was not started by this stack — leaving it running"
+    # Only stop Ollama if WE started it (pid file exists).
+    # Avoids killing an Ollama instance the user started separately.
+    if [[ -f /tmp/ollama.pid ]]; then
+        PID=$(cat /tmp/ollama.pid)
+        if kill -0 "$PID" 2>/dev/null; then
+            info "Stopping Ollama (pid $PID)..."
+            kill "$PID"
+            rm -f /tmp/ollama.pid
+            ok "Ollama stopped"
+        else
+            warn "Ollama pid $PID not running — skipping"
+            rm -f /tmp/ollama.pid
+        fi
+    else
+        warn "Ollama was not started by this stack — leaving it running"
+    fi
+
 fi
 
 echo ""
