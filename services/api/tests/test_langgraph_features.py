@@ -139,6 +139,24 @@ def test_agent_run_state_and_stream(client):
     assert '"agent"' in r.text and "[DONE]" in r.text
 
 
+def test_agent_history_returns_checkpoint_snapshots(client):
+    for message in ("first", "second"):
+        client.post("/lg/agent/run", json={"message": message, "thread_id": "H"})
+
+    history = client.get("/lg/agent/history/H").json()
+
+    assert history["thread_id"] == "H"
+    assert history["history"]
+    assert history["history"][0]["checkpoint_id"]
+    assert any(
+        snapshot["values"]["messages"][-1]["content"] == "second"
+        for snapshot in history["history"]
+        if snapshot["values"].get("messages")
+    )
+    assert len(client.get("/lg/agent/history/H?limit=1").json()["history"]) == 1
+    assert client.get("/lg/agent/history/H?limit=0").status_code == 422
+
+
 def test_approval_http_flow(client):
     started = client.post("/lg/approval/start", json={"request": "r", "thread_id": "A"}).json()
     assert started["status"] == "awaiting_approval"
