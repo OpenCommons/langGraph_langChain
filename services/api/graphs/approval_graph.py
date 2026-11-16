@@ -8,7 +8,7 @@ returned to the caller. Resume the same ``thread_id`` with
 
 from __future__ import annotations
 
-from typing import Literal, TypedDict
+from typing import Annotated, Literal
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage
@@ -16,24 +16,28 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import interrupt
 
+from graphs.state import StateFactory, reduce_latest
 
-class ApprovalState(TypedDict, total=False):
+
+class ApprovalState(StateFactory, total=False):
     request: str
     proposal: str
     approved: bool
     feedback: str
-    result: str
+    result: Annotated[str | None, reduce_latest("result")]
 
 
 def build_approval_graph(llm: BaseChatModel, checkpointer: BaseCheckpointSaver):
     def draft(state: ApprovalState) -> dict:
         reply = llm.invoke(
-            [HumanMessage(content=f"Propose a short action plan for: {state['request']}")]
+            [HumanMessage(content=f"Propose a short action plan for: {state.get('request', '')}")]
         )
         return {"proposal": str(reply.content)}
 
     def approval(state: ApprovalState) -> dict:
-        decision = interrupt({"proposal": state["proposal"], "question": "Approve this plan?"})
+        decision = interrupt(
+            {"proposal": state.get("proposal", ""), "question": "Approve this plan?"}
+        )
         return {
             "approved": bool(decision.get("approved")),
             "feedback": decision.get("feedback", ""),
@@ -43,7 +47,7 @@ def build_approval_graph(llm: BaseChatModel, checkpointer: BaseCheckpointSaver):
         return "execute" if state.get("approved") else "cancel"
 
     def execute(state: ApprovalState) -> dict:
-        return {"result": f"executed: {state['proposal']}"}
+        return {"result": f"executed: {state.get('proposal', '')}"}
 
     def cancel(state: ApprovalState) -> dict:
         return {"result": f"cancelled: {state.get('feedback') or 'rejected by reviewer'}"}

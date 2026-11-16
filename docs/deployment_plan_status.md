@@ -24,10 +24,10 @@ Tests named below run with `pytest services/api/tests --ignore=services/api/test
 
 | Status | Count |
 |---|---|
-| Done | 7 |
+| Done | 8 |
 | Partial | 17 |
 | Blocked | 2 |
-| Not started | 4 |
+| Not started | 3 |
 
 ## Task audit
 
@@ -39,7 +39,7 @@ Tests named below run with `pytest services/api/tests --ignore=services/api/test
 | T1.4 | Provision observability accounts (LangSmith, Langfuse) | Completed | **Blocked** | Accounts/keys cannot be created from the repo. Config surface exists (`LANGSMITH_*`, `OTEL_EXPORTER_OTLP_*`); nothing is provisioned. Langfuse is reachable through its OTLP endpoint, not through a Langfuse SDK. |
 | T2.1 | OpenTelemetry & OpenInference tracing | Completed | **Done** | `core/tracing.py` (`TRACING_BACKEND=otel`, OpenInference LangChain instrumentation); `tests/test_providers_tracing.py::test_otel_emits_spans_for_langchain_runs` (skips when the optional packages are absent). Spans are emitted for LangChain runs, which LangGraph steps ride on; no collector was available to confirm end-to-end export. |
 | T2.2 | Custom callback handler library | Completed | **Partial** | `core/llm_factory.LoggingCallbackHandler` logs LLM/tool start/end. **No token-count aggregation or latency tracking.** |
-| T2.3 | Unified state schema library (`omega_tau`) | Completed | **Not started** | No `omega_tau` or shared schema module. Each graph defines its own `TypedDict`/`MessagesState` (`graphs/*.py`). |
+| T2.3 | Unified state schema library (`omega_tau`) | Completed | **Done** | `graphs/state.py` provides `BaseGraphState`, `StateFactory`, and shared reducers; the ReAct, approval, and supervisor graphs use the shared contract. `tests/test_state_reducers.py` checks reducer laws with generated values. |
 | T3.1 | ReAct agent core node | Completed | **Done** | `graphs/react_agent.py` (custom `StateGraph`, not `create_agent`); `tests/test_langgraph_features.py`. |
 | T3.2 | Input/output guardrails middleware | Completed | **Partial** | `governance/tools.py` verifies every **tool call** over the whole thread before it runs (`tests/test_governance*.py`). Not `AgentMiddleware`; no model-call (`wrap_model_call`) screening or output-schema validation. |
 | T3.3 | Verify Workflow 1 callback & tracing integration | Completed | **Blocked** | Needs a real LangSmith/Langfuse project. In-memory OTel span capture is tested; the hosted check is not possible here. |
@@ -51,7 +51,7 @@ Tests named below run with `pytest services/api/tests --ignore=services/api/test
 | T5.2 | Central supervisor router | Completed | **Done** | `graphs/supervisor_graph.py` (`parse_route`, bounded `max_steps`); not the `langgraph-supervisor` package. |
 | T5.3 | Cross-thread long-term memory | Completed | **Partial** | Store + `/lg/memory` API (see T1.2). **No memory-extraction node and no injection of stored preferences into prompts.** |
 | T5.4 | Verify subgraph isolation & compression | Completed | **Not started** | No compression of subgraph scratchpads; nothing to verify. |
-| T6.1 | Bounded join-semilattice state reducers | Completed | **Partial** | `MessagesState` uses `add_messages`; supervisor uses `operator.add` (associative, **not** commutative). `evals` invariant `monotonic_state` checks accumulation empirically; no proof of the lattice laws. |
+| T6.1 | Bounded join-semilattice state reducers | Completed | **Partial** | `graphs/state.py` adds tested set-union, max, and ordered-latest reducers. `add_messages` preserves conversational order and is intentionally not commutative; the quality-evaluation router remains missing (T6.2). |
 | T6.2 | Conditional router edges for quality evaluation | Completed | **Partial** | Conditional edges exist (`route_after_agent`, supervisor). **No code-syntax / validation-criteria evaluation router.** |
 | T6.3 | Deterministic recursion limits | Completed | **Done** | `GRAPH_RECURSION_LIMIT=25` applied in `routers/langgraph_api._config`; supervisor `max_steps`; `terminates` eval invariant (`tests/test_evals.py`). |
 | T6.4 | Verify mathematical OEE runtime invariants | Completed | **Partial** | `governance/` + `evals/` check admissibility, termination and monotonic state **empirically** (tests, golden cases). Verification happens at the tool boundary, not before node scheduling. See `docs/GOVERNANCE.md` for the exact guarantees; no formal OEE-completeness claim is made. |
@@ -70,7 +70,7 @@ Tests named below run with `pytest services/api/tests --ignore=services/api/test
 |---|---|
 | "PostgresSaver and PgStore endpoints active with zero loss" | Wired now (this change); not previously present. Not load-tested for loss. |
 | "All 5 operational workflows generating OpenTelemetry spans" | Spans are available behind `TRACING_BACKEND=otel`; confirmed only with an in-memory exporter. Workflows WF-2/3/4/5 do not exist as specified. |
-| "Verified omega_tau schema and tau conditional edge router present" | Neither exists (T2.3, T6.2). |
+| "Verified omega_tau schema and tau conditional edge router present" | The shared schema and tested reducers now exist (T2.3); the conditional quality-evaluation router remains missing (T6.2). |
 | "OEE Runtime Safety Compliant: YES" | Not supportable. See `docs/GOVERNANCE.md` for what is and is not guaranteed. |
 
 ## What this change implemented from the PR #4 follow-ups

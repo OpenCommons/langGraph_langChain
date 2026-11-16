@@ -4,6 +4,9 @@
 setup:
 	@bash scripts/setup.sh
 
+test:
+	@python3 -m pytest services/api/tests --ignore=services/api/tests/e2e
+
 start:
 	@bash scripts/start.sh
 
