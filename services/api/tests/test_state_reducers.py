@@ -1,9 +1,12 @@
 """Algebraic properties of shared graph-state reducers."""
 
+from datetime import UTC
+from typing import Annotated, get_type_hints
+
 from hypothesis import given
 from hypothesis import strategies as st
 
-from graphs.state import reduce_latest, reduce_max, reduce_set_union
+from graphs.state import BaseGraphState, StateFactory, reduce_latest, reduce_max, reduce_set_union
 
 
 @given(st.sets(st.integers()), st.sets(st.integers()))
@@ -64,13 +67,13 @@ def test_latest_is_idempotent(value):
 @given(
     st.sets(st.integers()),
     st.sets(st.integers()),
-    st.sets(st.integers()),
 )
-def test_set_union_handles_none_as_identity(first, second, third):
+def test_set_union_handles_none_as_identity(items, other):
     reducer = reduce_set_union("items")
-    assert reducer(None, first) == first
-    assert reducer(first, None) == first
+    assert reducer(None, items) == items
+    assert reducer(items, None) == items
     assert reducer(None, None) == set()
+    assert reducer(items, other) == items | other
 
 
 @given(st.integers())
@@ -87,3 +90,22 @@ def test_latest_handles_none_as_identity(value):
     assert reducer(None, value) == value
     assert reducer(value, None) == value
     assert reducer(None, None) is None
+
+
+@given(
+    st.datetimes(timezones=st.just(UTC)),
+    st.datetimes(timezones=st.just(UTC)),
+)
+def test_latest_uses_timestamp_order(left, right):
+    reducer = reduce_latest("updated_at")
+    assert reducer(left, right) == max(left, right)
+
+
+def test_state_factory_subclass_preserves_base_and_domain_annotations():
+    class DomainState(StateFactory, total=False):
+        labels: Annotated[set[str], reduce_set_union("labels")]
+
+    annotations = get_type_hints(DomainState, include_extras=True)
+    base_annotations = get_type_hints(BaseGraphState, include_extras=True)
+    assert annotations["messages"] == base_annotations["messages"]
+    assert annotations["labels"].__metadata__[0].__name__ == "reduce_set_union_labels"

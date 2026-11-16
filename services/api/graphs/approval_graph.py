@@ -30,12 +30,14 @@ class ApprovalState(StateFactory, total=False):
 def build_approval_graph(llm: BaseChatModel, checkpointer: BaseCheckpointSaver):
     def draft(state: ApprovalState) -> dict:
         reply = llm.invoke(
-            [HumanMessage(content=f"Propose a short action plan for: {state['request']}")]
+            [HumanMessage(content=f"Propose a short action plan for: {state.get('request', '')}")]
         )
         return {"proposal": str(reply.content)}
 
     def approval(state: ApprovalState) -> dict:
-        decision = interrupt({"proposal": state["proposal"], "question": "Approve this plan?"})
+        decision = interrupt(
+            {"proposal": state.get("proposal", ""), "question": "Approve this plan?"}
+        )
         return {
             "approved": bool(decision.get("approved")),
             "feedback": decision.get("feedback", ""),
@@ -45,7 +47,7 @@ def build_approval_graph(llm: BaseChatModel, checkpointer: BaseCheckpointSaver):
         return "execute" if state.get("approved") else "cancel"
 
     def execute(state: ApprovalState) -> dict:
-        return {"result": f"executed: {state['proposal']}"}
+        return {"result": f"executed: {state.get('proposal', '')}"}
 
     def cancel(state: ApprovalState) -> dict:
         return {"result": f"cancelled: {state.get('feedback') or 'rejected by reviewer'}"}

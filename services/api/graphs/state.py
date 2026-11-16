@@ -1,4 +1,4 @@
-"""Shared state schemas and reducers for LangGraph workflows."""
+"""Shared state schemas and merge-safe reducers for LangGraph workflows."""
 
 from __future__ import annotations
 
@@ -6,67 +6,83 @@ from collections.abc import Callable, Hashable
 from typing import Annotated, Any, Protocol, TypedDict, TypeVar
 
 from langchain_core.messages import BaseMessage
-from langgraph.graph import add_messages
+from langgraph.graph.message import add_messages
 
-_ItemT = TypeVar("_ItemT", bound=Hashable)
+__all__ = [
+    "BaseGraphState",
+    "StateFactory",
+    "add_messages",
+    "reduce_latest",
+    "reduce_max",
+    "reduce_set_union",
+]
 
 
-class _SupportsLessThan(Protocol):
+class SupportsOrdering(Protocol):
     def __lt__(self, other: Any, /) -> bool: ...
 
-
-class _SupportsGreaterThan(Protocol):
     def __gt__(self, other: Any, /) -> bool: ...
 
 
-_ValueT = TypeVar("_ValueT", bound=_SupportsLessThan | _SupportsGreaterThan)
-
-
-class BaseGraphState(TypedDict):
-    """Common graph state with LangChain's ordered message reducer."""
-
-    messages: Annotated[list[BaseMessage], add_messages]
-
-
-class StateFactory(BaseGraphState, total=False):
-    """TypedDict base for defining domain-specific graph states."""
+SetItemT = TypeVar("SetItemT", bound=Hashable)
+OrderedT = TypeVar("OrderedT", bound=SupportsOrdering)
 
 
 def reduce_set_union(
     field_name: str,
-) -> Callable[[set[_ItemT] | None, set[_ItemT] | None], set[_ItemT]]:
-    """Build a reducer that merges a set field with an order-independent union."""
+) -> Callable[[set[SetItemT] | None, set[SetItemT] | None], set[SetItemT]]:
+    """Build a reducer that merges set-valued fields without depending on update order."""
     if not field_name:
         raise ValueError("field_name must not be empty")
 
-    def reducer(left: set[_ItemT] | None, right: set[_ItemT] | None) -> set[_ItemT]:
-        return (set() if left is None else left) | (set() if right is None else right)
+    def reducer(current: set[SetItemT] | None, update: set[SetItemT] | None) -> set[SetItemT]:
+        return (current or set()) | (update or set())
 
+    reducer.__name__ = f"reduce_set_union_{field_name}"
     return reducer
 
 
-def reduce_max(field_name: str) -> Callable[[_ValueT | None, _ValueT | None], _ValueT | None]:
-    """Build a reducer that keeps the maximum comparable value (None is the identity)."""
+def reduce_max(
+    field_name: str,
+) -> Callable[[int | float | None, int | float | None], int | float | None]:
+    """Build a max reducer for numeric fields, treating missing values as identity."""
     if not field_name:
         raise ValueError("field_name must not be empty")
 
-    def reducer(left: _ValueT | None, right: _ValueT | None) -> _ValueT | None:
-        if left is None:
-            return right
-        if right is None:
-            return left
-        try:
-            return max(left, right)
-        except TypeError as exc:
-            raise TypeError(f"values for {field_name!r} must be mutually comparable") from exc
+    def reducer(current: int | float | None, update: int | float | None) -> int | float | None:
+        if current is None:
+            return update
+        if update is None:
+            return current
+        return max(current, update)
 
+    reducer.__name__ = f"reduce_max_{field_name}"
     return reducer
 
 
-def reduce_latest(field_name: str) -> Callable[[_ValueT | None, _ValueT | None], _ValueT | None]:
-    """Build a deterministic latest-value reducer using the values' total ordering.
+def reduce_latest(field_name: str) -> Callable[[OrderedT | None, OrderedT | None], OrderedT | None]:
+    """Build a deterministic reducer for values whose natural order reflects recency.
 
-    Values must carry an ordering that represents recency (for example, an ISO
-    timestamp or a ``(version, value)`` tuple) when chronological LWW is needed.
+    The greatest value wins, so timestamps resolve to the newest timestamp. For
+    unorderable values, store an ordered version alongside the value instead.
     """
-    return reduce_max(field_name)
+    if not field_name:
+        raise ValueError("field_name must not be empty")
+
+    def reducer(current: OrderedT | None, update: OrderedT | None) -> OrderedT | None:
+        if current is None:
+            return update
+        if update is None:
+            return current
+        return max(current, update)
+
+    reducer.__name__ = f"reduce_latest_{field_name}"
+    return reducer
+
+
+class BaseGraphState(TypedDict):
+    messages: Annotated[list[BaseMessage], add_messages]
+
+
+class StateFactory(BaseGraphState, total=False):
+    """Base TypedDict for defining domain-specific graph states."""

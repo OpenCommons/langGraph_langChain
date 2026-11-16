@@ -20,11 +20,21 @@ source of truth. `config.Settings` resolves it to the Ollama tag `llama3.1:8b`
 `make pull-model` pulls the default; any registered model works per request via
 `core.llm_factory.get_chat_model("<id or tag>")`.
 
+## MLX backend (exclusive alternative)
+
+On Apple Silicon the chat backend can be Apple MLX instead of Ollama. The choice
+is exclusive and global (`USE_MLX=true|false` in `.env`), not per-request, because
+memory is the constraint. With `USE_MLX=true`, `get_chat_model()` returns a
+`ChatOpenAI` pointed at the host-native `mlx_lm.server` (`MLX_BASE_URL`); with
+`false` it returns `ChatOllama`. Asking for a model registered for the inactive
+backend raises `ModelBackendError`. Embeddings stay on Ollama. See
+[`MLX_INTEGRATION.md`](MLX_INTEGRATION.md).
+
 ## Layout
 
 | Path | Contents |
 |---|---|
-| `core/llm_factory.py` | `get_chat_model()` factory (ChatOllama), logging callback, LangSmith env export |
+| `core/llm_factory.py` | `get_chat_model()` factory (ChatOllama, or ChatOpenAI for MLX), logging callback, LangSmith env export |
 | `chains/lcel.py` | prompt templates; summarize, Q&A and Pydantic structured-output chains |
 | `chains/tools.py` | `calculator` (safe AST evaluator), `current_time`, retrieval-tool wrapper |
 | `chains/rag.py` | load → split → ingest → retriever chain (Qdrant via `core/vector_store.py`) |
@@ -33,6 +43,7 @@ source of truth. `config.Settings` resolves it to the Ollama tag `llama3.1:8b`
 | `graphs/checkpoint.py` | SQLite checkpointer; `thread_id` selects the conversation |
 | `graphs/approval_graph.py` | human-in-the-loop: `interrupt()` before executing a plan |
 | `graphs/supervisor_graph.py` | supervisor routing to `math` / `writer` workers, bounded steps |
+| `graphs/state.py` | shared message state schema and deterministic reducers |
 | `routers/langchain_api.py`, `routers/langgraph_api.py` | HTTP surface |
 
 The pre-existing `/graph/rag` and `/graph/agent` (Reality Engine-bound graphs)
@@ -40,19 +51,18 @@ and `/rag/*`, `/chat` are unchanged.
 
 ## Shared graph state and reducers
 
-`graphs/state.py` defines `BaseGraphState` with the common `messages` field.
-Domain-specific states extend `StateFactory` and annotate their additional
-fields with a reducer: `reduce_set_union` for unordered set accumulation,
-`reduce_max` for monotonic counters, and `reduce_latest` for values whose total
-ordering represents recency (for example, timestamps or versioned values).
-These reducers are associative, commutative, and idempotent, so parallel graph
-updates converge regardless of merge order.
+Graphs use `BaseGraphState` for messages and extend `StateFactory` for
+domain-specific fields. State fields that may be merged from parallel updates
+should use reducers whose result is independent of update order: set union,
+numeric maximum, or a naturally ordered value. These reducers are
+commutative, associative, and idempotent, so retries and merge ordering do not
+change their result. `reduce_latest` selects the greatest value; timestamps
+therefore select the newest timestamp, while unordered status values need an
+explicit version or timestamp to express chronology.
 
-The `messages` field deliberately reuses LangChain's `add_messages`: it preserves
-conversation order and is not commutative for arbitrary messages. Use it for
-ordered chat history, not as a join-semilattice reducer. `reduce_latest` also
-needs values with a meaningful recency ordering; plain text is only ordered
-lexicographically.
+`add_messages` is intentionally different: it preserves message order and is
+not commutative. It remains appropriate for conversational history, whose order
+is part of the data rather than a merge-independent aggregate.
 
 ## Endpoints
 
@@ -69,6 +79,7 @@ curl -s localhost:4000/lc/rag        -d '{"question":"..."}' -H 'Content-Type: a
 curl -s localhost:4000/lg/agent/run    -d '{"message":"What is 17*23?","thread_id":"t1"}' -H 'Content-Type: application/json'
 curl -sN localhost:4000/lg/agent/stream -d '{"message":"...","thread_id":"t1"}' -H 'Content-Type: application/json'  # graph events (SSE)
 curl -s localhost:4000/lg/agent/state/t1
+curl -s localhost:4000/lg/agent/history/t1
 curl -s localhost:4000/lg/approval/start  -d '{"request":"rotate keys","thread_id":"a1"}' -H 'Content-Type: application/json'
 curl -s localhost:4000/lg/approval/resume -d '{"thread_id":"a1","approved":true}' -H 'Content-Type: application/json'
 curl -s localhost:4000/lg/supervisor/run  -d '{"task":"add 2+2 and write it up"}' -H 'Content-Type: application/json'
@@ -93,3 +104,8 @@ scripted fake chat model in `tests/fakes.py`, so no Ollama is required:
 ```bash
 make test
 ```
+
+`GET /lg/agent/history/{thread_id}` returns up to 20 of the thread's newest
+checkpoint snapshots (configurable with `?limit=`, from 1 to 100), including
+checkpoint IDs and serialized graph state. It is read-only and uses the
+configured checkpointer; the default deployment stores checkpoints in SQLite.

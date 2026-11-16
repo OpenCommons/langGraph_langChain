@@ -2,10 +2,8 @@
 Chat-model factory and tracing hooks for the LangChain / LangGraph modules.
 
 ``get_chat_model`` is the only place a chat model is built for the new
-``chains`` and ``graphs`` modules. With ``LLM_PROVIDER=ollama`` (default) and no
-arguments it returns the stack default (``DEFAULT_MODEL`` → llama3.1-8b →
-``llama3.1:8b``); any registry id or raw Ollama tag can be passed instead. Any
-other ``LLM_PROVIDER`` goes through LangChain's ``init_chat_model``.
+``chains`` and ``graphs`` modules. ``USE_MLX`` exclusively selects the MLX
+backend; otherwise ``LLM_PROVIDER`` selects Ollama or another LangChain provider.
 """
 
 from __future__ import annotations
@@ -15,12 +13,26 @@ from typing import Any
 
 import structlog
 from langchain_core.callbacks import BaseCallbackHandler
-from langchain_core.language_models import BaseChatModel
+from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_ollama import ChatOllama
+from langchain_openai import ChatOpenAI
 
 from config import get_settings, resolve_model_tag
+from core.model_registry import ModelEntry, load_registry
 
 log = structlog.get_logger()
+
+
+class ModelBackendError(ValueError):
+    """The requested model is not available in the active backend."""
+
+
+def _registry_entry(model: str) -> ModelEntry | None:
+    try:
+        registry = load_registry()
+    except (FileNotFoundError, ValueError):
+        return None
+    return registry.by_id(model) or registry.by_tag(model)
 
 
 def get_chat_model(
@@ -29,14 +41,39 @@ def get_chat_model(
     temperature: float = 0.1,
     **kwargs: Any,
 ) -> BaseChatModel:
-    """Build a chat model from configuration.
-
-    Ollama: ``model`` is a registry id or tag. Other providers (``LLM_PROVIDER``):
-    ``model`` or ``LLM_MODEL`` is the provider's own model name.
-    """
+    """Build a chat model from the selected inference backend."""
     s = get_settings()
+    if s.use_mlx:
+        requested = model or s.mlx_model
+        entry = _registry_entry(requested)
+        if entry is not None and entry.backend != "mlx":
+            raise ModelBackendError(
+                f"Model '{model}' is registered for the {entry.backend} backend but the active "
+                f"backend is mlx (USE_MLX=true): model not available in active backend. "
+                "Switch with `make use-mlx` / `make use-ollama`."
+            )
+        if entry is None:
+            raise ModelBackendError(
+                f"Model '{requested}' is not an MLX model in the registry: model not available "
+                "in active backend (USE_MLX=true)."
+            )
+        return ChatOpenAI(
+            base_url=s.mlx_base_url,
+            api_key="mlx",
+            model=entry.tag,
+            temperature=temperature,
+            **kwargs,
+        )
+
     provider = s.llm_provider.strip().lower() or "ollama"
     if provider == "ollama":
+        entry = _registry_entry(model) if model else None
+        if entry is not None and entry.backend != "ollama":
+            raise ModelBackendError(
+                f"Model '{model}' is registered for the {entry.backend} backend but the active "
+                f"backend is ollama (USE_MLX=false): model not available in active backend. "
+                "Switch with `make use-mlx` / `make use-ollama`."
+            )
         tag = resolve_model_tag(model, s.models_registry_path) if model else s.llm_model
         return ChatOllama(base_url=s.ollama_base_url, model=tag, temperature=temperature, **kwargs)
 

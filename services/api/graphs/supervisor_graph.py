@@ -66,7 +66,8 @@ def build_supervisor_graph(
         return {"messages": [AIMessage(content=f"[writer] {reply.content}")]}
 
     def route(state: SupervisorState) -> str:
-        return state["next"] if state["next"] in WORKERS else END
+        next_node = state.get("next", "FINISH")
+        return next_node if next_node in WORKERS else END
 
     graph = StateGraph(SupervisorState)
     graph.add_node("supervisor", supervisor)

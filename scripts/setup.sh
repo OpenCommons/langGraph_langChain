@@ -104,6 +104,28 @@ if [[ "$EMBED_MODEL" != "ternary-bonsai:4" ]]; then
     ok "Embedding model ready: $EMBED_MODEL"
 fi
 
+# ── Inference backend: Ollama (default) or MLX — exclusive ────────────────────
+# Memory is the limiting factor, so only one runtime is used. This only records
+# the choice (and installs MLX deps); start.sh starts the selected runtime.
+# Pre-set USE_MLX=true|false in the environment to skip the prompt.
+MLX_ANSWER="${USE_MLX:-}"
+if [[ -z "$MLX_ANSWER" && -t 0 ]]; then
+    read -r -p "Use MLX instead of Ollama for inference? [y/n] " REPLY || REPLY="n"
+    [[ "$REPLY" =~ ^[Yy] ]] && MLX_ANSWER=true || MLX_ANSWER=false
+fi
+if [[ "$MLX_ANSWER" == "true" ]]; then
+    [[ "$(uname -s)-$(uname -m)" == "Darwin-arm64" ]] || warn "MLX requires macOS on Apple Silicon"
+    info "Installing MLX dependencies into .venv-mlx..."
+    python3 -m venv "$ROOT_DIR/.venv-mlx"
+    "$ROOT_DIR/.venv-mlx/bin/pip" install -q -r "$ROOT_DIR/services/api/requirements-mlx.txt" \
+        || die "MLX dependency install failed"
+    bash "$SCRIPT_DIR/lib/env_set.sh" USE_MLX true
+    ok "MLX selected (USE_MLX=true) — 'make start' will start MLX and skip Ollama"
+else
+    bash "$SCRIPT_DIR/lib/env_set.sh" USE_MLX false
+    ok "Ollama selected (USE_MLX=false)"
+fi
+
 # ── Start Docker stack ────────────────────────────────────────────────────────
 info "Starting Docker services (Qdrant, Redis, API, Open WebUI)..."
 docker compose pull --quiet qdrant redis open-webui

@@ -14,6 +14,17 @@ _DEFAULT_MODEL_FALLBACK_TAG = "llama3.1:8b"
 
 class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
+
+    # Exclusive inference backend: Ollama (false) or Apple MLX (true). Memory is
+    # the limiting factor, so exactly one runtime is up at a time; there is no
+    # per-request switching. MLX runs natively on the host (mlx_lm.server).
+    use_mlx: bool = False
+    # Native API on the host. In compose, MLX_BASE_URL is set to
+    # mlx_docker_base_url's value so the container reaches the host runtime.
+    mlx_base_url: str = "http://localhost:8081/v1"
+    mlx_docker_base_url: str = "http://host.docker.internal:8081/v1"
+    # Registry id (backend "mlx") used when no model is requested and use_mlx.
+    mlx_model: str = "muse-glimmer"
     qdrant_host: str = "localhost"
     qdrant_port: int = 6333
     redis_url: str = "redis://localhost:4379"
@@ -26,8 +37,7 @@ class Settings(BaseSettings):
     # Chat-model provider: "ollama" (default, local) or any langchain
     # init_chat_model provider — openai, anthropic, google_vertexai,
     # google_genai, azure_openai, ... For a non-ollama provider LLM_MODEL must
-    # be that provider's model name; keys come from the provider's own env var
-    # (OPENAI_API_KEY, ANTHROPIC_API_KEY, ...). Nothing is hard-coded.
+    # be that provider's model name; keys come from the provider's own env var.
     llm_provider: str = "ollama"
     # Optional endpoint override for non-ollama providers (gateways, proxies).
     llm_base_url: str = ""
@@ -111,7 +121,11 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _resolve_llm_model(self) -> "Settings":
-        if not self.llm_model and self.llm_provider.lower() == "ollama":
+        if self.use_mlx:
+            # llm_model is an Ollama tag; with MLX the default is mlx_model.
+            if not self.llm_model:
+                self.llm_model = resolve_model_tag(self.mlx_model, self.models_registry_path)
+        elif not self.llm_model and self.llm_provider.lower() == "ollama":
             self.llm_model = resolve_model_tag(self.default_model, self.models_registry_path)
         return self
 
