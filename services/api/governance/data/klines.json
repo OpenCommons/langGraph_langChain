@@ -1,0 +1,12 @@
+{
+  "klines": [
+    {"label": "hazard", "s0": {"mode": "default"}, "frames": [[1.0, 0.0, 0.0, 0.6]]},
+    {"label": "hazard", "s0": {"mode": "default"}, "frames": [[0.0, 0.0, 0.0, 0.6], [0.5, 0.0, 0.0, 0.6]]},
+    {"label": "hazard", "s0": {"mode": "default"}, "frames": [[0.0, 1.0, 0.0, 0.3]]},
+    {"label": "hazard", "s0": {"mode": "default"}, "frames": [[0.0, 0.0, 0.5, 0.6]]},
+    {"label": "nominal", "s0": {"mode": "default"}, "frames": [[0.0, 0.0, 0.0, 0.0]]},
+    {"label": "nominal", "s0": {"mode": "default"}, "frames": [[0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.3]]},
+    {"label": "nominal", "s0": {"mode": "default"}, "frames": [[0.5, 0.0, 0.0, 0.0]]},
+    {"label": "nominal", "s0": {"mode": "default"}, "frames": [[0.0, 0.5, 0.0, 0.0]]}
+  ]
+}

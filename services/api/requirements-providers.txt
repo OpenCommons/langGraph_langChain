@@ -1,0 +1,11 @@
+# Optional chat-model provider integrations, selected at runtime with
+# LLM_PROVIDER (+ LLM_MODEL and the provider's API-key env var). Install only
+# what you use:  pip install -r requirements.txt -r requirements-providers.txt
+#   LLM_PROVIDER=openai           OPENAI_API_KEY
+#   LLM_PROVIDER=anthropic        ANTHROPIC_API_KEY
+#   LLM_PROVIDER=google_genai     GOOGLE_API_KEY
+#   LLM_PROVIDER=google_vertexai  Google application-default credentials
+langchain-openai==1.6.7
+langchain-anthropic==1.7.5
+langchain-google-genai==4.4.0
+langchain-google-vertexai==3.2.4

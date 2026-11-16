@@ -9,6 +9,7 @@ from config import get_settings
 from core.bridge_binding import EngineAffinityMiddleware
 from routers import (
     chat,
+    governance_api,
     graph,
     health,
     langchain_api,
@@ -32,11 +33,33 @@ async def lifespan(app: FastAPI):
         llm_model=s.llm_model,
         embed_model=s.embed_model,
         ollama_url=s.ollama_base_url,
+        backend="mlx" if s.use_mlx else "ollama",
+        mlx_url=s.mlx_base_url if s.use_mlx else None,
     )
-    from core.llm_factory import apply_langsmith_env
+    if s.use_mlx:
+        import httpx
 
-    if apply_langsmith_env():
-        log.info("LangSmith tracing enabled", project=s.langsmith_project)
+        try:
+            httpx.get(f"{s.ollama_base_url}/api/tags", timeout=1.0).raise_for_status()
+            log.warning(
+                "USE_MLX=true but Ollama is also running — both runtimes share memory; "
+                "stop Ollama or run `make use-ollama`"
+            )
+        except Exception:
+            pass
+    from core.tracing import setup_tracing
+
+    tracing = setup_tracing()
+    if tracing:
+        log.info("Tracing enabled", backend=tracing)
+    if s.checkpoint_backend == "postgres" and s.postgres_auto_setup:
+        try:
+            from graphs.checkpoint import setup_persistence
+
+            await asyncio.to_thread(setup_persistence)
+            log.info("Postgres checkpointer/store ready")
+        except Exception as e:
+            log.warning("Postgres persistence not ready at startup", error=str(e))
     # Warm up vector store connection on startup
     try:
         from core.vector_store import get_vector_store
@@ -137,6 +160,7 @@ app.include_router(rag.router)
 app.include_router(graph.router)
 app.include_router(langchain_api.router)
 app.include_router(langgraph_api.router)
+app.include_router(governance_api.router)
 app.include_router(patient_wellness.router)
 app.include_router(observations.router)
 app.include_router(graphql_app, prefix="/graphql")

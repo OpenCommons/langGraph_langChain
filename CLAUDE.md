@@ -22,6 +22,9 @@ This repo provides local AI/RAG/vector services and a RealityEngine bridge. It s
 - `services/api/core/embeddings.py`: embedding support.
 - `services/api/core/vector_store.py`: vector store behavior.
 - `services/api/core/topology_builder.py`: topology/graph construction.
+- MLX backend (exclusive with Ollama, `USE_MLX` in `.env`): `llm_factory` returns
+  `ChatOpenAI` → host-native `mlx_lm.server` (`:8081`); `scripts/start-mlx.sh`,
+  `scripts/stop-mlx.sh`, `make use-mlx` / `make use-ollama`; see `docs/MLX_INTEGRATION.md`.
 - `services/api/core/model_registry.py`: model registry loader; joins model registry
   metadata with the `.env` selection and live Ollama tags.
 - `services/api/graphs/`: agent and RAG graph flows, plus the LangGraph
@@ -40,6 +43,18 @@ This repo provides local AI/RAG/vector services and a RealityEngine bridge. It s
   (`health_bands.json`; `documents/` is the curated health corpus loaded by
   `scripts/ingest_health_docs.py`). New domains follow the same shape, e.g.
   `data/communityServices/*.json` and `data/communityServices/documents/*`.
+- `services/api/governance/`: OEE governance layer (aDFA guard, Lamport clock,
+  Merkle chain, K-line replay, atomic rule swap, capability tokens);
+  `get_engine()` singleton, `/governance/*` routes in `routers/governance_api.py`,
+  every `/lg/agent` tool call goes through `GovernanceEngine.admit`. Guarantees
+  and limits (not formal OEE completeness): `docs/GOVERNANCE.md`.
+- `services/api/graphs/checkpoint.py`, `graphs/store.py`: SQLite or Postgres
+  (`CHECKPOINT_BACKEND`) checkpointer and store; `scripts/db_setup.py` migrates.
+- `services/api/core/tracing.py`, `core/llm_factory.py`: `TRACING_BACKEND`
+  and `LLM_PROVIDER` selection.
+- `services/api/evals/`, `data/evals/`: policy-driven OEE eval harness (`make evals`).
+- `docker-compose.ha.yml`, `config/nginx-ha.conf`, `scripts/loadtest/`: HA overlay and load test.
+- `docs/deployment_plan_status.md`: audited status of the workbook tasks.
 - `data/machines/`: localAI's machine definitions (contracted here, not in the corpus).
 - `models/`: local model assets.
 - `scripts/`: operational helpers and examples.
@@ -58,6 +73,10 @@ make model-pull ID=<model-id>  # pull a registered model
 make pull-model                # pull DEFAULT_MODEL (llama3.1-8b)
 make langchain-demo            # /lc demos
 make langgraph-demo            # /lg demo
+make governance                # governance state; `make health` also verifies the chain
+make evals                     # policy-driven eval gate
+make db-setup                  # Postgres checkpointer/store migration
+make loadtest                  # load test; `make ha-up` for the HA overlay
 
 # Machine contract gates (need a sibling RealityEngine_Machines checkout)
 ./scripts/validate-machines.sh       # data/machines/*.json vs the canonical schema

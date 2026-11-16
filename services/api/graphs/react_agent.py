@@ -18,6 +18,7 @@ from langchain_core.tools import BaseTool
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode
+from langgraph.store.base import BaseStore
 
 DEFAULT_SYSTEM_PROMPT = (
     "You are a helpful assistant. Use the available tools when they help, then answer concisely."
@@ -35,6 +36,7 @@ def build_react_agent(
     tools: list[BaseTool],
     checkpointer: BaseCheckpointSaver | None = None,
     system_prompt: str = DEFAULT_SYSTEM_PROMPT,
+    store: BaseStore | None = None,
 ):
     bound = llm.bind_tools(tools)
 
@@ -49,4 +51,4 @@ def build_react_agent(
     graph.add_edge(START, "agent")
     graph.add_conditional_edges("agent", route_after_agent, {"tools": "tools", "end": END})
     graph.add_edge("tools", "agent")
-    return graph.compile(checkpointer=checkpointer)
+    return graph.compile(checkpointer=checkpointer, store=store)

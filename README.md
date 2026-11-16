@@ -136,8 +136,23 @@ architecture, configuration and endpoint examples.
 | `POST /lg/supervisor/run` | supervisor → worker multi-agent workflow |
 | `POST /graph/rag` · `/graph/agent` | existing Reality Engine-bound LangGraph graphs |
 
+| `GET /governance/state` · `/governance/chain` · `POST /governance/replay` · `/dispatch` · `/rules` | OEE governance layer: read-only inspection, counterfactual replay, `202` handoff, replay-gated rule swap |
+| `PUT/GET /lg/memory/{user_id}` | cross-thread long-term memory (PostgresStore when `CHECKPOINT_BACKEND=postgres`) |
+
 Configuration: `DEFAULT_MODEL`, `LLM_MODEL`, `CHECKPOINT_DB_PATH`,
 `LANGSMITH_TRACING` / `LANGSMITH_API_KEY` / `LANGSMITH_PROJECT` (see `.env.example`).
+
+Persistence, providers, tracing, governance and ops (env vars in `.env.example`):
+
+| Topic | Doc | Commands |
+|---|---|---|
+| OEE governance layer (aDFA guard, Lamport clock, Merkle chain, K-line replay, atomic rule swap, capability tokens) — **a tested runtime guard, not a claim of formal OEE completeness**; see its guarantees and limits | [`docs/GOVERNANCE.md`](docs/GOVERNANCE.md) | `make governance`, `make health` (also prints the chain verdict) |
+| PostgreSQL checkpointer/store, HA overlay, load test | [`docs/HA_DEPLOYMENT.md`](docs/HA_DEPLOYMENT.md) | `make db-setup`, `make ha-up`, `make loadtest` |
+| Model providers and tracing (LangSmith / OpenTelemetry) | [`docs/PROVIDERS_AND_TRACING.md`](docs/PROVIDERS_AND_TRACING.md) | `LLM_PROVIDER=…`, `TRACING_BACKEND=…` |
+| Policy-driven evaluation | [`docs/EVALUATION.md`](docs/EVALUATION.md) | `make evals` |
+| Deployment-plan status audit | [`docs/deployment_plan_status.md`](docs/deployment_plan_status.md) | |
+
+Tests: `pytest services/api/tests --ignore=services/api/tests/e2e`.
 
 ### Adding a model
 

@@ -25,7 +25,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["config", "core", "graphs", "routers"]
+known-first-party = ["config", "core", "evals", "governance", "graphs", "routers"]
 
 [tool.pyright]
 pythonVersion = "3.11"

@@ -77,6 +77,11 @@ jobs:
       - name: Validate docker-compose.yml
         run: docker compose config --quiet
 
+      - name: Validate the HA overlay (docker-compose.ha.yml)
+        env:
+          GOVERNANCE_TOKEN_SECRET: ci-validation-only
+        run: docker compose -f docker-compose.yml -f docker-compose.ha.yml config --quiet
+
   # ── Machine contract ────────────────────────────────────────────────────────
   # data/machines/*.json load into the Reality Engine alongside the corpus and
   # write real positions in the universal vector, but they live here rather than
