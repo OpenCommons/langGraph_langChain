@@ -33,7 +33,12 @@
     "  min_ram_gb    Host RAM floor for usable speed at this quantization, NOT a",
     "                hard limit. Entries above the host's RAM stay listed and are",
     "                reported by GET /models with fits_host=false.",
-    "  status        supported | experimental | broken (see notes for why)."
+    "  status        supported | experimental | broken (see notes for why).",
+    "  backend       ollama (default when absent) | mlx. Exactly one backend is",
+    "                active, chosen by USE_MLX in .env; entries for the other",
+    "                backend are not listed or usable. For mlx entries `tag` is",
+    "                the Hugging Face repo id passed to `mlx_lm.server --model`",
+    "                and source.kind is huggingface-mlx."
   ],
   "version": "1.1",
   "runtime": {
@@ -228,6 +233,27 @@
       "status": "broken",
       "license": "Apache-2.0",
       "notes": "Registers and appears in the Open WebUI dropdown, but inference and embeddings return HTTP 500 (file_type=unknown): the prism-ml repo ships only a Q1_0/BitNet GGUF that Ollama's bundled GGML does not recognize. Blocked on upstream TQ1_0 support in ollama/ollama. Note embed_dim is 2560, not the 768 that EMBED_DIM defaults to — selecting this as the embedder needs a matching Qdrant collection as well as a working runtime."
+    },
+    {
+      "id": "muse-glimmer",
+      "tag": "RadixArk/Muse-Glimmer-q4-MLX",
+      "aliases": ["muse-glimmer-q4-mlx"],
+      "name": "Muse-Glimmer 4-bit (MLX)",
+      "publisher": "RadixArk",
+      "family": "muse",
+      "role": "llm",
+      "backend": "mlx",
+      "source": {
+        "kind": "huggingface-mlx",
+        "ref": "RadixArk/Muse-Glimmer-q4-MLX",
+        "download_url": "https://huggingface.co/RadixArk/Muse-Glimmer-q4-MLX"
+      },
+      "quantization": "q4",
+      "capabilities": ["completion"],
+      "min_ram_gb": 16,
+      "install": "on-demand",
+      "status": "experimental",
+      "notes": "Starter MLX model. Apple Silicon only; served by `mlx_lm.server` on :8081 when USE_MLX=true (make mlx-start). Size and context length are not yet verified."
     }
   ]
 }

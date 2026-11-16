@@ -11,36 +11,56 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 source "$ROOT_DIR/scripts/lib/ollama_guard.sh"
 source "$ROOT_DIR/scripts/lib/models_registry.sh"
-ensure_ollama_pinned_version
 
 [[ -f .env ]] || { warn ".env not found — copying from .env.example"; cp .env.example .env; }
 # shellcheck source=/dev/null
 set -a; source .env; set +a
 
-# ── Ollama (native) ───────────────────────────────────────────────────────────
-if curl -sf http://localhost:11434/api/tags >/dev/null 2>&1; then
-    ok "Ollama already running"
-else
-    info "Starting Ollama..."
-    ollama serve >>/tmp/ollama.log 2>&1 &
-    echo $! > /tmp/ollama.pid
-    for i in $(seq 1 15); do
-        sleep 1
-        curl -sf http://localhost:11434/api/tags >/dev/null 2>&1 && break
-    done
-    curl -sf http://localhost:11434/api/tags >/dev/null 2>&1 || die "Ollama failed to start — check /tmp/ollama.log"
-    ok "Ollama started (pid $(cat /tmp/ollama.pid))"
-fi
+USE_MLX="${USE_MLX:-false}"
 
-# ── Default model (LangChain / LangGraph) ─────────────────────────────────────
-# DEFAULT_MODEL is a registry id; LLM_MODEL (an Ollama tag) overrides it.
-DEFAULT_MODEL="${DEFAULT_MODEL:-llama3.1-8b}"
-LLM_TAG="${LLM_MODEL:-$(registry_field "$DEFAULT_MODEL" tag 2>/dev/null || true)}"
-LLM_TAG="${LLM_TAG:-$DEFAULT_MODEL}"
-if ollama list 2>/dev/null | awk 'NR>1 {print $1}' | grep -qxF "$LLM_TAG"; then
-    ok "Default model installed: $LLM_TAG"
+if [[ "$USE_MLX" == "true" ]]; then
+    # ── MLX (native, exclusive — Ollama is NOT started) ──────────────────────
+    MLX_MODEL_ID="${MLX_MODEL:-muse-glimmer}"
+    MLX_REPO="$(registry_field "$MLX_MODEL_ID" tag 2>/dev/null || true)"
+    MLX_REPO="${MLX_REPO:-$MLX_MODEL_ID}"
+    if curl -sf http://localhost:11434/api/tags >/dev/null 2>&1; then
+        warn "USE_MLX=true but Ollama is running — both share memory. Stop it (make use-mlx does)."
+    fi
+    bash "$ROOT_DIR/scripts/start-mlx.sh" "$MLX_REPO" || die "MLX failed to start"
+    BACKEND="mlx"
+    BACKEND_URL="http://localhost:8081/v1"
+    LLM_TAG="$MLX_REPO"
+    DEFAULT_MODEL="$MLX_MODEL_ID"
 else
-    warn "Default model $LLM_TAG is not pulled — /lc and /lg need it. Run:  make pull-model"
+    ensure_ollama_pinned_version
+    BACKEND="ollama"
+    BACKEND_URL="http://localhost:11434"
+    # ── Ollama (native) ───────────────────────────────────────────────────────────
+    if curl -sf http://localhost:11434/api/tags >/dev/null 2>&1; then
+        ok "Ollama already running"
+    else
+        info "Starting Ollama..."
+        ollama serve >>/tmp/ollama.log 2>&1 &
+        echo $! > /tmp/ollama.pid
+        for i in $(seq 1 15); do
+            sleep 1
+            curl -sf http://localhost:11434/api/tags >/dev/null 2>&1 && break
+        done
+        curl -sf http://localhost:11434/api/tags >/dev/null 2>&1 || die "Ollama failed to start — check /tmp/ollama.log"
+        ok "Ollama started (pid $(cat /tmp/ollama.pid))"
+    fi
+
+    # ── Default model (LangChain / LangGraph) ─────────────────────────────────────
+    # DEFAULT_MODEL is a registry id; LLM_MODEL (an Ollama tag) overrides it.
+    DEFAULT_MODEL="${DEFAULT_MODEL:-llama3.1-8b}"
+    LLM_TAG="${LLM_MODEL:-$(registry_field "$DEFAULT_MODEL" tag 2>/dev/null || true)}"
+    LLM_TAG="${LLM_TAG:-$DEFAULT_MODEL}"
+    if ollama list 2>/dev/null | awk 'NR>1 {print $1}' | grep -qxF "$LLM_TAG"; then
+        ok "Default model installed: $LLM_TAG"
+    else
+        warn "Default model $LLM_TAG is not pulled — /lc and /lg need it. Run:  make pull-model"
+    fi
+
 fi
 
 # LangGraph checkpoints (CHECKPOINT_DB_PATH) live in ./volumes/state, mounted
@@ -123,7 +143,7 @@ if [[ "${LANGSMITH_TRACING:-false}" == "true" ]]; then
     echo "  LangSmith tracing ON (project ${LANGSMITH_PROJECT:-localaistack})"
 fi
 echo "  Qdrant    http://localhost:4333/dashboard"
-echo "  Ollama    http://localhost:11434"
+echo "  Backend   ${BACKEND} (exclusive) ${BACKEND_URL}"
 echo "  Grafana   http://localhost:4002           (localAIStack Overview dashboard)"
 echo "  Loki API  http://localhost:4100"
 echo ""
