@@ -1,4 +1,4 @@
-.PHONY: mlx-start mlx-stop mlx-status use-mlx use-ollama pull-model langchain-demo langgraph-demo setup start stop up down logs health query ingest models models-installed ollama-check model-pull model-info provider-conformance db-setup governance evals loadtest ha-up ha-down clean
+.PHONY: mlx-start mlx-stop mlx-status use-mlx use-ollama pull-model langchain-demo langgraph-demo setup test start stop up down logs health query ingest models models-installed ollama-check model-pull model-info provider-conformance db-setup governance evals loadtest ha-up ha-down clean
 
 # ── Lifecycle ─────────────────────────────────────────────────────────────────
 setup:

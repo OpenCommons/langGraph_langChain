@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Hashable
 from typing import Annotated, Any, Protocol, TypedDict, TypeVar
 
 from langchain_core.messages import BaseMessage
@@ -24,7 +24,7 @@ class SupportsOrdering(Protocol):
     def __gt__(self, other: Any, /) -> bool: ...
 
 
-SetItemT = TypeVar("SetItemT")
+SetItemT = TypeVar("SetItemT", bound=Hashable)
 OrderedT = TypeVar("OrderedT", bound=SupportsOrdering)
 
 
@@ -32,6 +32,8 @@ def reduce_set_union(
     field_name: str,
 ) -> Callable[[set[SetItemT] | None, set[SetItemT] | None], set[SetItemT]]:
     """Build a reducer that merges set-valued fields without depending on update order."""
+    if not field_name:
+        raise ValueError("field_name must not be empty")
 
     def reducer(current: set[SetItemT] | None, update: set[SetItemT] | None) -> set[SetItemT]:
         return (current or set()) | (update or set())
@@ -44,6 +46,8 @@ def reduce_max(
     field_name: str,
 ) -> Callable[[int | float | None, int | float | None], int | float | None]:
     """Build a max reducer for numeric fields, treating missing values as identity."""
+    if not field_name:
+        raise ValueError("field_name must not be empty")
 
     def reducer(current: int | float | None, update: int | float | None) -> int | float | None:
         if current is None:
@@ -62,6 +66,8 @@ def reduce_latest(field_name: str) -> Callable[[OrderedT | None, OrderedT | None
     The greatest value wins, so timestamps resolve to the newest timestamp. For
     unorderable values, store an ordered version alongside the value instead.
     """
+    if not field_name:
+        raise ValueError("field_name must not be empty")
 
     def reducer(current: OrderedT | None, update: OrderedT | None) -> OrderedT | None:
         if current is None:
@@ -78,6 +84,5 @@ class BaseGraphState(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
 
 
-# Subclass this TypedDict to define domain-specific state fields.
 class StateFactory(BaseGraphState, total=False):
-    pass
+    """Base TypedDict for defining domain-specific graph states."""

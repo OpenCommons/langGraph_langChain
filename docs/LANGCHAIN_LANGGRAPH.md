@@ -103,7 +103,6 @@ scripted fake chat model in `tests/fakes.py`, so no Ollama is required:
 
 ```bash
 make test
-pytest services/api/tests --ignore=services/api/tests/e2e
 ```
 
 `GET /lg/agent/history/{thread_id}` returns up to 20 of the thread's newest

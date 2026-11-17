@@ -3,6 +3,7 @@ import os
 
 import httpx
 import redis as redis_lib
+import structlog
 from fastapi import APIRouter
 from qdrant_client import QdrantClient
 
@@ -12,6 +13,11 @@ from core.model_registry import host_ram_gb
 from core.registry_resolver import resolve_bridge_targets
 
 router = APIRouter()
+log = structlog.get_logger(__name__)
+
+
+def _log_probe_failure(service: str, exc: Exception) -> None:
+    log.warning("health_probe_failed", service=service, error_type=type(exc).__name__)
 
 
 async def _check_pe(pe_url: str, ssl_verify: bool | str) -> dict:
@@ -45,7 +51,8 @@ async def _check_pe(pe_url: str, ssl_verify: bool | str) -> dict:
                 else None,
             }
     except Exception as exc:
-        return {"status": "unreachable", "error": str(exc)[:200]}
+        _log_probe_failure("pe", exc)
+        return {"status": "unreachable", "error": "probe failed"}
 
 
 async def _check_re(re_url: str, ssl_verify: bool | str) -> dict:
@@ -76,7 +83,8 @@ async def _check_re(re_url: str, ssl_verify: bool | str) -> dict:
             "ps_length": len(ps),
         }
     except Exception as exc:
-        return {"status": "unreachable", "error": str(exc)[:200]}
+        _log_probe_failure("re", exc)
+        return {"status": "unreachable", "error": "probe failed"}
 
 
 @router.get("/health")
@@ -109,7 +117,8 @@ async def health():
             services["mlx"] = "ok"
             services["mlx_models"] = models
         except Exception as exc:
-            services["mlx"] = f"error: {exc}"
+            _log_probe_failure("mlx", exc)
+            services["mlx"] = "error: probe failed"
 
     async def _check_ollama() -> None:
         try:
@@ -119,7 +128,8 @@ async def health():
             services["ollama"] = "ok"
             services["ollama_models"] = models
         except Exception as exc:
-            services["ollama"] = f"error: {exc}"
+            _log_probe_failure("ollama", exc)
+            services["ollama"] = "error: probe failed"
 
     def _check_qdrant() -> None:
         try:
@@ -128,7 +138,8 @@ async def health():
             services["qdrant"] = "ok"
             services["qdrant_collections"] = collections
         except Exception as exc:
-            services["qdrant"] = f"error: {exc}"
+            _log_probe_failure("qdrant", exc)
+            services["qdrant"] = "error: probe failed"
 
     def _check_redis() -> None:
         try:
@@ -136,7 +147,8 @@ async def health():
             rc.ping()
             services["redis"] = "ok"
         except Exception as exc:
-            services["redis"] = f"error: {exc}"
+            _log_probe_failure("redis", exc)
+            services["redis"] = "error: probe failed"
 
     def _check_postgres() -> None:
         # Only probed when Postgres is the durable backend (CHECKPOINT_BACKEND=postgres).
@@ -147,7 +159,8 @@ async def health():
                 conn.execute("SELECT 1")
             services["postgres"] = "ok"
         except Exception as exc:
-            services["postgres"] = f"error: {exc}"
+            _log_probe_failure("postgres", exc)
+            services["postgres"] = "error: probe failed"
 
     # Run sync probes in a thread pool so they don't block the event loop
     loop = asyncio.get_event_loop()
